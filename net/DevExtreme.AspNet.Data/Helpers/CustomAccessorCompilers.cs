@@ -1,4 +1,6 @@
-﻿using System;
+﻿using AutoMapper;
+using AutoMapper.Internal;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -32,6 +34,27 @@ namespace DevExtreme.AspNet.Data.Helpers {
 
         public static void RegisterContext<T>(string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
             CustomAccessorLibrary.Add<T>(PropertyName, ResolveExprFunc);
+        }
+
+        public static void RegisterAutomapperProfiles(IMapper mapper) {
+
+            //Get all automapper config maps and create expressions that can be parsed by devex.aspnet.data
+            //Create a dictionary of dictionaries so they can be (efficiently) extracted by the devex library
+            //by type and property name
+            var allTypeMaps = mapper.ConfigurationProvider.Internal().GetAllTypeMaps();
+            foreach(TypeMap map in allTypeMaps) {
+                var propertyMaps = map.PropertyMaps;
+
+                foreach(PropertyMap propertyMap in propertyMaps) {
+                    string modelMemberType = propertyMap?.TypeMap?.SourceType?.Name;
+                    string destinationName = propertyMap?.DestinationName;
+                    var exp = propertyMap.CustomMapExpression;
+                    if(modelMemberType != null && destinationName != null && exp == null) continue;
+
+                    CustomAccessorLibrary.Add(modelMemberType, destinationName, exp);
+                }
+            }
+            RegisterAccessorFinder();
         }
 
         private static void RegisterAccessorFinder() {
