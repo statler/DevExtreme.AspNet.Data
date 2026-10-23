@@ -77,7 +77,13 @@ namespace DevExtreme.AspNet.Data {
                 var _type = GetItemType();
                 var qryBase = Context.Mapper.ConfigurationProvider.Internal().ProjectionBuilder.GetProjection(_type, projectionType, Context.AutomapperProjectionParameters, Array.Empty<MemberPath>());
                 var qryExpr = qryBase.Projection;
-                Expr = Expression.Call(typeof(Queryable), nameof(Queryable.Select), new[] { _type, qryExpr.ReturnType }, Expr, Expression.Quote(qryExpr));
+                if(qryBase.LetClause != null && qryBase.Projection != null) {
+                    //Automapper can multi-stage complex queries. Need to push one select into another.
+                    Expr = Expression.Call(typeof(Queryable), nameof(Queryable.Select), new[] { _type, qryBase.LetClause.ReturnType }, Expr, qryBase.LetClause);
+                    Expr = Expression.Call(typeof(Queryable), nameof(Queryable.Select), new[] { qryBase.LetClause.ReturnType, qryBase.Projection.ReturnType }, Expr, qryBase.Projection);
+                } else {
+                    Expr = Expression.Call(typeof(Queryable), nameof(Queryable.Select), new[] { _type, qryExpr.ReturnType }, Expr, Expression.Quote(qryExpr));
+                }
             }
         }
 
