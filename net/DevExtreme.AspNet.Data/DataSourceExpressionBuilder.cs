@@ -18,12 +18,21 @@ namespace DevExtreme.AspNet.Data {
         }
 
         public Expression BuildLoadExpr(bool paginate, IList filterOverride = null, IReadOnlyList<string> selectOverride = null, Type projectionType = null) {
-            AddFilter(filterOverride);
-            AddSort();
-            AddSelect(selectOverride, projectionType);
-            if(paginate)
-                AddPaging();
-            return Expr;
+            if(Context.ProjectBeforeFilter) {
+                AddSelect(selectOverride, projectionType);
+                AddFilter(filterOverride);
+                AddSort();
+                if(paginate)
+                    AddPaging();
+                return Expr;
+            } else {
+                AddFilter(filterOverride);
+                AddSort();
+                AddSelect(selectOverride, projectionType);
+                if(paginate)
+                    AddPaging();
+                return Expr;
+            }
         }
 
         public Expression BuildCountExpr() {
@@ -32,7 +41,10 @@ namespace DevExtreme.AspNet.Data {
             return Expr;
         }
 
-        public Expression BuildLoadGroupsExpr(bool paginate, bool suppressGroups = false, bool suppressTotals = false) {
+        public Expression BuildLoadGroupsExpr(bool paginate, bool suppressGroups = false, bool suppressTotals = false, Type projectionType = null) {
+            if(Context.ProjectBeforeFilter) {
+                AddSelect(null, projectionType);
+            }
             AddFilter();
             AddRemoteGrouping(suppressGroups, suppressTotals, suppressGroups);
             if(paginate)

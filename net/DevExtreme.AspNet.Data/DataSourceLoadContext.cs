@@ -88,6 +88,7 @@ namespace DevExtreme.AspNet.Data {
         public IMapper Mapper => _mapper;
         public bool HasProjection => _mapper != null;
         public object AutomapperProjectionParameters { get; set; }
+        public bool ProjectBeforeFilter => _options.ProjectBeforeFilter ?? false;
     }
 
     // Grouping
