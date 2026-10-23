@@ -1,4 +1,5 @@
-﻿using DevExtreme.AspNet.Data.RemoteGrouping;
+﻿using AutoMapper.Internal;
+using DevExtreme.AspNet.Data.RemoteGrouping;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,10 +17,10 @@ namespace DevExtreme.AspNet.Data {
             Context = context;
         }
 
-        public Expression BuildLoadExpr(bool paginate, IList filterOverride = null, IReadOnlyList<string> selectOverride = null) {
+        public Expression BuildLoadExpr(bool paginate, IList filterOverride = null, IReadOnlyList<string> selectOverride = null, Type projectionType = null) {
             AddFilter(filterOverride);
             AddSort();
-            AddSelect(selectOverride);
+            AddSelect(selectOverride, projectionType);
             if(paginate)
                 AddPaging();
             return Expr;
@@ -69,9 +70,15 @@ namespace DevExtreme.AspNet.Data {
                 Expr = new SortExpressionCompiler(GetItemType(), Context.GuardNulls, Context.AutomapperProjectionParameters).Compile(Expr, Context.GetFullSort());
         }
 
-        void AddSelect(IReadOnlyList<string> selectOverride = null) {
+        void AddSelect(IReadOnlyList<string> selectOverride = null, Type projectionType = null) {
             if(selectOverride != null || Context.HasAnySelect && Context.UseRemoteSelect)
                 Expr = CreateSelectCompiler().Compile(Expr, selectOverride ?? Context.FullSelect);
+            else if(projectionType != null) {
+                var _type = GetItemType();
+                var qryBase = Context.Mapper.ConfigurationProvider.Internal().ProjectionBuilder.GetProjection(_type, projectionType, Context.AutomapperProjectionParameters, Array.Empty<MemberPath>());
+                var qryExpr = qryBase.Projection;
+                Expr = Expression.Call(typeof(Queryable), nameof(Queryable.Select), new[] { _type, qryExpr.ReturnType }, Expr, Expression.Quote(qryExpr));
+            }
         }
 
         void AddPaging() {
