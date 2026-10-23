@@ -45,8 +45,13 @@ namespace DevExtreme.AspNet.Data {
                     currentTarget = ReadExpando(currentTarget, clientExprItem);
                 else if(DynamicBindingHelper.ShouldUseDynamicBinding(currentTarget.Type))
                     currentTarget = DynamicBindingHelper.CompileGetMember(currentTarget, clientExprItem);
-                else
-                    currentTarget = FixReflectedType(GetPropertyOrField(currentTarget, clientExprItem));
+                else {
+                    var customResultSplit = CustomAccessorCompilers.TryCompile(target, clientExprItem, RuntimeResolutionContext);
+                    if(customResultSplit != null) {
+                        currentTarget = customResultSplit;
+                    }
+                    else currentTarget = FixReflectedType(GetPropertyOrField(currentTarget, clientExprItem));
+                }
 
                 progression.Add(currentTarget);
             }

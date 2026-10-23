@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
+using System.Collections.ObjectModel;
 using System.Linq.Expressions;
 
 namespace DevExtreme.AspNet.Data.Helpers {
@@ -12,12 +12,38 @@ namespace DevExtreme.AspNet.Data.Helpers {
 
         static readonly ICollection<CompilerFuncWithContext> _compilersWithContext = new List<CompilerFuncWithContext>();
 
+        private static AccessorLibrary CustomAccessorLibrary = new AccessorLibrary();
+
         public static void Register(CompilerFunc compilerFunc) {
             _compilersWithContext.Add((target, accessorText, runtimeContext) => compilerFunc(target, accessorText));
         }
 
         public static void RegisterWithContext(CompilerFuncWithContext compilerFunc) {
             _compilersWithContext.Add(compilerFunc);
+        }
+
+        public static void Register<T, U>(string PropertyName, Expression<Func<T, U>> ResolveExpression) {
+            CustomAccessorLibrary.Add(PropertyName, ResolveExpression);
+        }
+
+        public static void RegisterContext<T, U>(string PropertyName, Func<object, Expression<Func<T, U>>> ResolveExprFunc) {
+            CustomAccessorLibrary.Add<T>(PropertyName, ResolveExprFunc);
+        }
+
+        public static void RegisterContext<T>(string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
+            CustomAccessorLibrary.Add<T>(PropertyName, ResolveExprFunc);
+        }
+
+        private static void RegisterAccessorFinder() {
+
+            //Register the method that finds the right accessor from the dictionary. This will provide
+            //an accessor for the registered Automapper and
+            RegisterWithContext((target, accessorText, runtimeContext) => {
+                var accessor = CustomAccessorLibrary.Get(target, target.Type.Name, accessorText, runtimeContext);
+                if(accessor != null) return accessor;
+
+                return null;
+            });
         }
 
         internal static Expression TryCompile(Expression expr, string accessorText, object runtimeContext) {
@@ -40,4 +66,91 @@ namespace DevExtreme.AspNet.Data.Helpers {
 
     }
 
+    public class AccessorLibrary {
+        ConcurrentDictionary<string, Dictionary<string, Accessor>> _dctAccessors = new ConcurrentDictionary<string, Dictionary<string, Accessor>>();
+        public AccessorLibrary() {
+        }
+
+        public void Add(string TypeName, string PropertyName, LambdaExpression ResolveExpression) {
+            var _accessor = new Accessor(TypeName, PropertyName, ResolveExpression);
+            if(_dctAccessors.ContainsKey(TypeName)) {
+                var expressionForType = _dctAccessors[TypeName];
+                expressionForType[PropertyName] = _accessor;
+            } else _dctAccessors.TryAdd(TypeName, new Dictionary<string, Accessor>() { [PropertyName] = _accessor });
+        }
+
+        public void Add(string TypeName, string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
+            var _accessor = new Accessor(TypeName, PropertyName, ResolveExprFunc);
+            if(_dctAccessors.ContainsKey(TypeName)) {
+                var expressionForType = _dctAccessors[TypeName];
+                expressionForType[PropertyName] = _accessor;
+            } else _dctAccessors.TryAdd(TypeName, new Dictionary<string, Accessor>() { [PropertyName] = _accessor });
+        }
+        public void Add<T>(string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
+            Add(typeof(T).Name, PropertyName, ResolveExprFunc);
+        }
+
+        public void Add<T>(string PropertyName, LambdaExpression ResolveExpression) {
+            Add(typeof(T).Name, PropertyName, ResolveExpression);
+        }
+
+        public void Add<T, U>(string PropertyName, Expression<Func<T, U>> ResolveExpression) {
+            Add(typeof(T).Name, PropertyName, ResolveExpression);
+        }
+
+        public Expression Get(Expression target, string TypeName, string PropertyName, object runtimeContext) {
+            if(_dctAccessors.ContainsKey(TypeName)) {
+                var expressionForType = _dctAccessors[TypeName];
+                if(expressionForType.ContainsKey(PropertyName)) {
+                    var expression = expressionForType[PropertyName].GetResolvedExpression(runtimeContext);
+                    return new ParameterVisitor(expression.Parameters, target as ParameterExpression)
+                        .VisitAndConvert(expression.Body, PropertyName);
+                }
+            }
+
+            return null;
+        }
+    }
+
+    public class Accessor {
+        public string TypeName { get; set; }
+        public string PropertyName { get; set; }
+        Func<object, LambdaExpression> ResolveExpression { get; set; }
+
+        public Accessor() {
+        }
+        public Accessor(string typeName, string propertyName, LambdaExpression resolveExpression) {
+            TypeName = typeName;
+            PropertyName = propertyName;
+            ResolveExpression = (o) => resolveExpression;
+        }
+        public Accessor(string typeName, string propertyName, Func<object, LambdaExpression> resolveExpressionFunc) {
+            TypeName = typeName;
+            PropertyName = propertyName;
+            ResolveExpression = resolveExpressionFunc;
+        }
+
+        public LambdaExpression GetResolvedExpression(object runtimeContext) {
+            return ResolveExpression(runtimeContext);
+        }
+    }
+
+    public class ParameterVisitor : ExpressionVisitor {
+        private readonly ReadOnlyCollection<ParameterExpression> _from;
+        private readonly ParameterExpression _to;
+        public ParameterVisitor(
+            ReadOnlyCollection<ParameterExpression> from,
+            ParameterExpression to) {
+            if(from == null) throw new ArgumentNullException("from");
+            if(to == null) throw new ArgumentNullException("to");
+            this._from = from;
+            this._to = to;
+        }
+        protected override Expression VisitParameter(ParameterExpression node) {
+            for(int i = 0; i < _from.Count; i++) {
+                if(node == _from[i]) return _to;
+            }
+            return node;
+        }
+    }
 }
