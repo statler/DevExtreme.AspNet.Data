@@ -25,11 +25,12 @@ namespace DevExtreme.AspNet.Data {
         readonly bool UseEnumerableOnce;
 #endif
 
-        public DataSourceLoaderImpl(IQueryable source, DataSourceLoadOptionsBase options, CancellationToken cancellationToken, bool sync) {
+        public DataSourceLoaderImpl(IQueryable source, DataSourceLoadOptionsBase options, CancellationToken cancellationToken, bool sync, object automapperProjectionParameters = null) {
             var providerInfo = new QueryProviderInfo(source.Provider);
 
             Source = source;
             Context = new DataSourceLoadContext(options, providerInfo, Source.ElementType);
+            Context.AutomapperProjectionParameters = automapperProjectionParameters;
             CreateExecutor = expr => new ExpressionExecutor(Source.Provider, expr, providerInfo, cancellationToken, sync, options.AllowAsyncOverSync);
 
 #if DEBUG
@@ -126,7 +127,7 @@ namespace DevExtreme.AspNet.Data {
                 await ContinueWithAggregationAsync<S>(null, null, result, false);
             } else {
                 var data = await ExecExprAsync<S>(CreateBuilder().BuildLoadExpr(false));
-                await ContinueWithAggregationAsync(data, new DefaultAccessor<S>(), result, false);
+                await ContinueWithAggregationAsync(data, new DefaultAccessor<S>(Context.AutomapperProjectionParameters), result, false);
             }
 
             return result;
@@ -136,11 +137,11 @@ namespace DevExtreme.AspNet.Data {
             if(Context.UseRemoteSelect)
                 return SelectHelper.ConvertRemoteResult(await ExecExprAnonAsync(loadExpr), Context.FullSelect);
 
-            return SelectHelper.Evaluate(await ExecExprAsync<S>(loadExpr), Context.FullSelect);
+            return SelectHelper.Evaluate(await ExecExprAsync<S>(loadExpr), Context.FullSelect, Context.AutomapperProjectionParameters);
         }
 
         async Task ContinueWithGroupingAsync<R>(IEnumerable<R> loadResult, LoadResult result) {
-            var accessor = new DefaultAccessor<R>();
+            var accessor = new DefaultAccessor<R>(Context.AutomapperProjectionParameters);
             if(Context.HasGroups) {
                 var groups = new GroupHelper<R>(accessor).Group(loadResult, Context.Group);
                 if(Context.RequireGroupCount)
@@ -170,7 +171,7 @@ namespace DevExtreme.AspNet.Data {
                 } else if(Context.HasSummary) {
                     if(includeData)
                         data = Buffer<R>(data);
-                    result.summary = new AggregateCalculator<R>(data, accessor, Context.TotalSummary, Context.GroupSummary).Run();
+                    result.summary = new AggregateCalculator<R>(data, accessor, Context.TotalSummary, Context.GroupSummary, null, Context.AutomapperProjectionParameters).Run();
                 }
             }
 
@@ -201,7 +202,8 @@ namespace DevExtreme.AspNet.Data {
                 await ExecExprAnonAsync(CreateBuilder().BuildLoadGroupsExpr(remotePaging, suppressGroups, suppressTotals)),
                 !suppressGroups && Context.HasGroups ? Context.Group.Count : 0,
                 !suppressTotals ? Context.TotalSummary : null,
-                !suppressGroups ? Context.GroupSummary : null
+                !suppressGroups ? Context.GroupSummary : null,
+                Context.AutomapperProjectionParameters
             );
         }
 

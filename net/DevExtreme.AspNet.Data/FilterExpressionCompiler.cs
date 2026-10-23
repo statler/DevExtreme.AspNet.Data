@@ -21,8 +21,8 @@ namespace DevExtreme.AspNet.Data {
 
         readonly bool _supportsEqualsMethod;
 
-        public FilterExpressionCompiler(Type itemType, bool guardNulls, bool stringToLower = false, bool supportsEqualsMethod = true)
-            : base(itemType, guardNulls) {
+        public FilterExpressionCompiler(Type itemType, bool guardNulls, bool stringToLower = false, bool supportsEqualsMethod = true, object runtimeResolutionContext = null)
+            : base(itemType, guardNulls, runtimeResolutionContext) {
             _stringToLower = stringToLower;
             _supportsEqualsMethod = supportsEqualsMethod;
         }

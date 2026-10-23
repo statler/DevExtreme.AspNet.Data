@@ -12,14 +12,16 @@ namespace DevExtreme.AspNet.Data {
     abstract class ExpressionCompiler {
         protected readonly Type ItemType;
         protected readonly bool GuardNulls;
+        public object RuntimeResolutionContext;
 
-        public ExpressionCompiler(Type itemType, bool guardNulls) {
+        public ExpressionCompiler(Type itemType, bool guardNulls, object runtimeResolutionContext = null) {
             ItemType = itemType;
             GuardNulls = guardNulls;
+            RuntimeResolutionContext = runtimeResolutionContext;
         }
 
         protected internal Expression CompileAccessorExpression(Expression target, string clientExpr, Action<List<Expression>> customizeProgression = null, bool liftToNullable = false) {
-            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr);
+            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr, RuntimeResolutionContext);
             if(customResult != null)
                 return customResult;
 

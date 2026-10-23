@@ -79,6 +79,11 @@ namespace DevExtreme.AspNet.Data {
         public bool SupportsEqualsMethod => !_providerInfo.IsXPO;
     }
 
+    // Projection
+    partial class DataSourceLoadContext {
+        public object AutomapperProjectionParameters { get; set; }
+    }
+
     // Grouping
     partial class DataSourceLoadContext {
         bool?

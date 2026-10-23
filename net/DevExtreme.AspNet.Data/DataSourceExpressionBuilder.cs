@@ -58,7 +58,7 @@ namespace DevExtreme.AspNet.Data {
             if(filterOverride != null || Context.HasFilter) {
                 var filterExpr = filterOverride != null && filterOverride.Count < 1
                     ? Expression.Lambda(Expression.Constant(false), Expression.Parameter(GetItemType()))
-                    : new FilterExpressionCompiler(GetItemType(), Context.GuardNulls, Context.UseStringToLower, Context.SupportsEqualsMethod).Compile(filterOverride ?? Context.Filter);
+                    : new FilterExpressionCompiler(GetItemType(), Context.GuardNulls, Context.UseStringToLower, Context.SupportsEqualsMethod, Context.AutomapperProjectionParameters).Compile(filterOverride ?? Context.Filter);
 
                 Expr = QueryableCall(nameof(Queryable.Where), Expression.Quote(filterExpr));
             }
@@ -66,7 +66,7 @@ namespace DevExtreme.AspNet.Data {
 
         void AddSort() {
             if(Context.HasAnySort)
-                Expr = new SortExpressionCompiler(GetItemType(), Context.GuardNulls).Compile(Expr, Context.GetFullSort());
+                Expr = new SortExpressionCompiler(GetItemType(), Context.GuardNulls, Context.AutomapperProjectionParameters).Compile(Expr, Context.GetFullSort());
         }
 
         void AddSelect(IReadOnlyList<string> selectOverride = null) {
@@ -87,7 +87,8 @@ namespace DevExtreme.AspNet.Data {
                 GetItemType(), Context.GuardNulls, Context.ExpandLinqSumType, Context.CreateAnonTypeNewTweaks(),
                 suppressGroups ? null : Context.Group,
                 suppressTotals ? null : Context.TotalSummary,
-                suppressGroupSummary ? null : Context.GroupSummary
+                suppressGroupSummary ? null : Context.GroupSummary,
+                Context.AutomapperProjectionParameters
             );
             Expr = compiler.Compile(Expr);
         }
@@ -97,7 +98,7 @@ namespace DevExtreme.AspNet.Data {
         }
 
         SelectExpressionCompiler CreateSelectCompiler()
-            => new SelectExpressionCompiler(GetItemType(), Context.GuardNulls, Context.CreateAnonTypeNewTweaks());
+            => new SelectExpressionCompiler(GetItemType(), Context.GuardNulls, Context.CreateAnonTypeNewTweaks(), Context.AutomapperProjectionParameters);
 
         Expression QueryableCall(string methodName)
             => Expression.Call(typeof(Queryable), methodName, GetQueryableGenericArguments(), Expr);
