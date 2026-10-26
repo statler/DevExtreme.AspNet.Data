@@ -1,4 +1,14 @@
-# DevExtreme ASP.NET Data
+# DXAutomap.AspNet.Data
+
+This repository contains the CivilPro fork of DevExtreme.AspNet.Data. The next NuGet release is **DXAutomap.AspNet.Data 2.0.0**, targeting **.NET 10** with **AutoMapperMIT 14.0.3**.
+
+- [Package usage and compatibility](net/DevExtreme.AspNet.Data/README.md)
+- [2.0.0 release notes and release procedure](docs/civilpro/RELEASE-2.0.0.md)
+- [Fork regression tests](net/DXAutomap.AspNet.Data.Tests/README.md)
+
+The sections below describe the upstream library. Their package badges and upstream release links are not the DXAutomap fork release channel.
+
+## Upstream DevExtreme ASP.NET Data
 
 [![CI](https://github.com/DevExpress/DevExtreme.AspNet.Data/actions/workflows/ci.yml/badge.svg?branch=master&event=push)](https://github.com/DevExpress/DevExtreme.AspNet.Data/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/DevExpress/DevExtreme.AspNet.Data/branch/master/graph/badge.svg)](https://codecov.io/gh/DevExpress/DevExtreme.AspNet.Data)

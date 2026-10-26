@@ -91,23 +91,28 @@ jobs:
 
     - uses: ./.github/actions/dotnet-test-build
 
-    - run: JetBrains.dotCover.CommandLineTools\tools\dotCover cover --ReturnTargetExitCode --ReportType=DetailedXML --Filters="+:module=DevExtreme.AspNet.Data" --Output=coverage_dotnet.xml --TargetExecutable=net\dotnet-test-all.cmd
+    - run: JetBrains.dotCover.CommandLineTools\tools\dotCover cover --ReturnTargetExitCode --ReportType=DetailedXML --Filters="+:module=DXAutomap.AspNet.Data" --Output=coverage_dotnet.xml --TargetExecutable=net\dotnet-test-all.cmd
 
     - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
       with:
         files: coverage_dotnet.xml
 
   release-packages:
+    needs: test-dotnet
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     env:
       DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
-      BUILD_CONFIGURATION: ${{ (github.repository == 'DevExpress/DevExtreme.AspNet.Data' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && 'Release' || 'Debug' }}
+      BUILD_CONFIGURATION: Release
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+      with:
+        dotnet-version: 10.0.x
 
     - run: node build/make-nojquery
     - run: node build/replace-meta "${{ github.run_number }}" "${{ github.ref }}" "${{ github.repository }}"
@@ -116,7 +121,7 @@ jobs:
     - run: npm pack ./js-nojquery
 
     - name: Prepare NuGet deps
-      if: env.BUILD_CONFIGURATION == 'Release'
+      if: github.repository == 'DevExpress/DevExtreme.AspNet.Data'
       uses: ./.github/actions/prepare-nuget-deps
       with:
         encrypted-key-path: net/DevExtreme.AspNet.Data/release.snk.enc

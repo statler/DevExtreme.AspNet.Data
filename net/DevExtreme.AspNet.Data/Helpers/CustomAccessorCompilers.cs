@@ -1,8 +1,7 @@
-﻿using AutoMapper;
+using AutoMapper;
 using AutoMapper.Internal;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq.Expressions;
 
@@ -12,28 +11,46 @@ namespace DevExtreme.AspNet.Data.Helpers {
         public delegate Expression CompilerFunc(Expression expr, string accessorText);
         public delegate Expression CompilerFuncWithContext(Expression expr, string accessorText, object runtimeContext);
 
-        static readonly ICollection<CompilerFuncWithContext> _compilersWithContext = new List<CompilerFuncWithContext>();
+        static readonly object _registrationLock = new object();
+        static volatile CompilerFuncWithContext[] _compilersWithContext = Array.Empty<CompilerFuncWithContext>();
+        static bool _accessorFinderRegistered;
 
-        private static AccessorLibrary CustomAccessorLibrary = new AccessorLibrary();
+        private static readonly AccessorLibrary CustomAccessorLibrary = new AccessorLibrary();
+        static readonly AccessorLibrary LegacyMappedAccessorLibrary = new AccessorLibrary();
+        static readonly CompilerFuncWithContext AccessorFinder = (target, member, context) =>
+            CustomAccessorLibrary.Get(target, target.Type.Name, member, context)
+            ?? LegacyMappedAccessorLibrary.Get(target, target.Type.Name, member, context);
 
         public static void Register(CompilerFunc compilerFunc) {
-            _compilersWithContext.Add((target, accessorText, runtimeContext) => compilerFunc(target, accessorText));
+            RegisterWithContext((target, accessorText, runtimeContext) => compilerFunc(target, accessorText));
         }
 
         public static void RegisterWithContext(CompilerFuncWithContext compilerFunc) {
-            _compilersWithContext.Add(compilerFunc);
+            lock(_registrationLock)
+                AddCompiler(compilerFunc);
+        }
+
+        // Called under _registrationLock. Readers keep a stable snapshot while registrations are added.
+        static void AddCompiler(CompilerFuncWithContext compilerFunc) {
+            var compilers = new CompilerFuncWithContext[_compilersWithContext.Length + 1];
+            Array.Copy(_compilersWithContext, compilers, _compilersWithContext.Length);
+            compilers[compilers.Length - 1] = compilerFunc;
+            _compilersWithContext = compilers;
         }
 
         public static void Register<T, U>(string PropertyName, Expression<Func<T, U>> ResolveExpression) {
             CustomAccessorLibrary.Add(PropertyName, ResolveExpression);
+            RegisterAccessorFinder();
         }
 
         public static void RegisterContext<T, U>(string PropertyName, Func<object, Expression<Func<T, U>>> ResolveExprFunc) {
             CustomAccessorLibrary.Add<T>(PropertyName, ResolveExprFunc);
+            RegisterAccessorFinder();
         }
 
         public static void RegisterContext<T>(string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
             CustomAccessorLibrary.Add<T>(PropertyName, ResolveExprFunc);
+            RegisterAccessorFinder();
         }
 
         public static void RegisterAutomapperProfiles(IMapper mapper) {
@@ -46,95 +63,103 @@ namespace DevExtreme.AspNet.Data.Helpers {
                 var propertyMaps = map.PropertyMaps;
 
                 foreach(PropertyMap propertyMap in propertyMaps) {
-                    string modelMemberType = propertyMap?.TypeMap?.SourceType?.Name;
+                    var modelMemberType = propertyMap?.TypeMap?.SourceType;
                     string destinationName = propertyMap?.DestinationName;
                     var exp = propertyMap.CustomMapExpression;
                     if(modelMemberType != null && destinationName != null && exp == null) continue;
 
-                    CustomAccessorLibrary.Add(modelMemberType, destinationName, exp);
+                    LegacyMappedAccessorLibrary.Add(modelMemberType, destinationName, exp);
                 }
             }
             RegisterAccessorFinder();
         }
 
         private static void RegisterAccessorFinder() {
+            lock(_registrationLock) {
+                if(_accessorFinderRegistered)
+                    return;
 
-            //Register the method that finds the right accessor from the dictionary. This will provide
-            //an accessor for the registered Automapper and
-            RegisterWithContext((target, accessorText, runtimeContext) => {
-                var accessor = CustomAccessorLibrary.Get(target, target.Type.Name, accessorText, runtimeContext);
-                if(accessor != null) return accessor;
-
-                return null;
-            });
+                // Keep the finder's position in registration order, including when profiles are registered again.
+                AddCompiler(AccessorFinder);
+                _accessorFinderRegistered = true;
+            }
         }
 
-        internal static Expression TryCompile(Expression expr, string accessorText, object runtimeContext) {
-            if(_compilersWithContext.Count >= 1) {
-                foreach(var compiler in _compilersWithContext) {
-                    var result = compiler(expr, accessorText, runtimeContext);
-                    if(result != null)
-                        return result;
+        internal static Expression TryCompile(Expression expr, string accessorText, object runtimeContext, CompilerFunc mappedAccessor = null) {
+            var finderVisited = false;
+            foreach(var compiler in _compilersWithContext) {
+                Expression result;
+                if(mappedAccessor != null && compiler == AccessorFinder) {
+                    finderVisited = true;
+                    result = CustomAccessorLibrary.Get(expr, expr.Type.Name, accessorText, runtimeContext)
+                        ?? mappedAccessor(expr, accessorText);
+                } else {
+                    result = compiler(expr, accessorText, runtimeContext);
                 }
+                if(result != null)
+                    return result;
             }
 
-            return null;
+            // A typed load can resolve its mapper without global profile registration.
+            return mappedAccessor != null && !finderVisited ? mappedAccessor(expr, accessorText) : null;
         }
 
 #if DEBUG
         internal static void Clear() {
-            _compilersWithContext.Clear();
+            lock(_registrationLock) {
+                _compilersWithContext = Array.Empty<CompilerFuncWithContext>();
+                _accessorFinderRegistered = false;
+            }
         }
 #endif
 
     }
 
     public class AccessorLibrary {
-        ConcurrentDictionary<string, ConcurrentDictionary<string, Accessor>> _dctAccessors = new ConcurrentDictionary<string, ConcurrentDictionary<string, Accessor>>();
+        readonly ConcurrentDictionary<Type, ConcurrentDictionary<string, Accessor>> _typedAccessors = new ConcurrentDictionary<Type, ConcurrentDictionary<string, Accessor>>();
+        // Retain the public string-keyed API for callers that use explicitly named libraries.
+        readonly ConcurrentDictionary<string, ConcurrentDictionary<string, Accessor>> _dctAccessors = new ConcurrentDictionary<string, ConcurrentDictionary<string, Accessor>>();
         public AccessorLibrary() {
         }
 
         public void Add(string TypeName, string PropertyName, LambdaExpression ResolveExpression) {
             var _accessor = new Accessor(TypeName, PropertyName, ResolveExpression);
-            if(_dctAccessors.ContainsKey(TypeName)) {
-                var expressionForType = _dctAccessors[TypeName];
-                expressionForType[PropertyName] = _accessor;
-            } else {
-                var accessorDct = new ConcurrentDictionary<string, Accessor>() { [PropertyName] = _accessor };
-                _dctAccessors.TryAdd(TypeName, accessorDct);
-            }
+            var expressionForType = _dctAccessors.GetOrAdd(TypeName, _ => new ConcurrentDictionary<string, Accessor>());
+            expressionForType[PropertyName] = _accessor;
         }
 
         public void Add(string TypeName, string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
             var _accessor = new Accessor(TypeName, PropertyName, ResolveExprFunc);
-            if(_dctAccessors.ContainsKey(TypeName)) {
-                var expressionForType = _dctAccessors[TypeName];
-                expressionForType[PropertyName] = _accessor;
-            } else {
-                var accessorDct = new ConcurrentDictionary<string, Accessor>() { [PropertyName] = _accessor };
-                _dctAccessors.TryAdd(TypeName, accessorDct);
-            }
+            var expressionForType = _dctAccessors.GetOrAdd(TypeName, _ => new ConcurrentDictionary<string, Accessor>());
+            expressionForType[PropertyName] = _accessor;
         }
         public void Add<T>(string PropertyName, Func<object, LambdaExpression> ResolveExprFunc) {
-            Add(typeof(T).Name, PropertyName, ResolveExprFunc);
+            Add(typeof(T), PropertyName, ResolveExprFunc);
         }
 
         public void Add<T>(string PropertyName, LambdaExpression ResolveExpression) {
-            Add(typeof(T).Name, PropertyName, ResolveExpression);
+            Add(typeof(T), PropertyName, ResolveExpression);
         }
 
         public void Add<T, U>(string PropertyName, Expression<Func<T, U>> ResolveExpression) {
-            Add(typeof(T).Name, PropertyName, ResolveExpression);
+            Add(typeof(T), PropertyName, ResolveExpression);
+        }
+
+        internal void Add(Type type, string propertyName, LambdaExpression expression) {
+            Add(type, propertyName, _ => expression);
+        }
+
+        internal void Add(Type type, string propertyName, Func<object, LambdaExpression> resolveExpression) {
+            var accessors = _typedAccessors.GetOrAdd(type, _ => new ConcurrentDictionary<string, Accessor>());
+            accessors[propertyName] = new Accessor(type.FullName, propertyName, resolveExpression);
         }
 
         public Expression Get(Expression target, string TypeName, string PropertyName, object runtimeContext) {
-            if(_dctAccessors.ContainsKey(TypeName)) {
-                var expressionForType = _dctAccessors[TypeName];
-                if(expressionForType.ContainsKey(PropertyName)) {
-                    var expression = expressionForType[PropertyName].GetResolvedExpression(runtimeContext);
-                    return new ParameterVisitor(expression.Parameters, target as ParameterExpression)
-                        .VisitAndConvert(expression.Body, PropertyName);
-                }
+            Accessor accessor;
+            if((_typedAccessors.TryGetValue(target.Type, out var typedAccessors) && typedAccessors.TryGetValue(PropertyName, out accessor))
+                || (_dctAccessors.TryGetValue(TypeName, out var namedAccessors) && namedAccessors.TryGetValue(PropertyName, out accessor))) {
+                var expression = accessor.GetResolvedExpression(runtimeContext);
+                return new ParameterVisitor(expression.Parameters, target).Visit(expression.Body);
             }
 
             return null;
@@ -166,10 +191,15 @@ namespace DevExtreme.AspNet.Data.Helpers {
 
     public class ParameterVisitor : ExpressionVisitor {
         private readonly ReadOnlyCollection<ParameterExpression> _from;
-        private readonly ParameterExpression _to;
+        private readonly Expression _to;
         public ParameterVisitor(
             ReadOnlyCollection<ParameterExpression> from,
-            ParameterExpression to) {
+            ParameterExpression to) : this(from, (Expression)to) {
+        }
+
+        public ParameterVisitor(
+            ReadOnlyCollection<ParameterExpression> from,
+            Expression to) {
             if(from == null) throw new ArgumentNullException("from");
             if(to == null) throw new ArgumentNullException("to");
             this._from = from;

@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DevExtreme.AspNet.Data.ResponseModel;
 using System;
 using System.Collections.Generic;
@@ -119,6 +119,9 @@ namespace DevExtreme.AspNet.Data {
         }
 
         static Task<LoadResult> LoadAsync<T, TDto>(IQueryable<T> source, DataSourceLoadOptionsBase options, CancellationToken ct, bool sync, IMapper mapper, object automapperProjectionParameters = null) {
+            if(typeof(TDto) != typeof(T) && mapper == null)
+                throw new ArgumentNullException(nameof(mapper));
+
             return new DataSourceLoaderImpl<T>(source, options, ct, sync, mapper, automapperProjectionParameters).LoadAsync<TDto>();
         }
 

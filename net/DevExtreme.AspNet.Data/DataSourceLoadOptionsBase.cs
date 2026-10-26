@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.ComponentModel;
 using System.Linq.Expressions;
@@ -118,7 +118,14 @@ namespace DevExtreme.AspNet.Data {
         public bool? SortByPrimaryKey { get; set; }
 
         public bool AllowAsyncOverSync { get; set; }
-        public bool? ProjectBeforeFilter { get; set; }
+        /// <summary>
+        /// Retained for compatibility only. This option is ignored; mapped fields are resolved before projection.
+        /// </summary>
+        [Obsolete("ProjectBeforeFilter is retired and has no effect. Remove it from load options.")]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [JsonIgnore]
+        [System.Runtime.Serialization.IgnoreDataMember]
+        public bool? ProjectBeforeFilter { get => null; set { } }
 
 #if DEBUG
         internal Action<Expression> ExpressionWatcher;

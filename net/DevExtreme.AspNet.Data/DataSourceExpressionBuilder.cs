@@ -1,4 +1,4 @@
-﻿using AutoMapper.Internal;
+using AutoMapper.Internal;
 using DevExtreme.AspNet.Data.RemoteGrouping;
 using System;
 using System.Collections;
@@ -18,21 +18,12 @@ namespace DevExtreme.AspNet.Data {
         }
 
         public Expression BuildLoadExpr(bool paginate, IList filterOverride = null, IReadOnlyList<string> selectOverride = null, Type projectionType = null) {
-            if(Context.ProjectBeforeFilter) {
-                AddSelect(selectOverride, projectionType);
-                AddFilter(filterOverride);
-                AddSort();
-                if(paginate)
-                    AddPaging();
-                return Expr;
-            } else {
-                AddFilter(filterOverride);
-                AddSort();
-                AddSelect(selectOverride, projectionType);
-                if(paginate)
-                    AddPaging();
-                return Expr;
-            }
+            AddFilter(filterOverride);
+            AddSort();
+            AddSelect(selectOverride, projectionType);
+            if(paginate)
+                AddPaging();
+            return Expr;
         }
 
         public Expression BuildCountExpr() {
@@ -41,10 +32,7 @@ namespace DevExtreme.AspNet.Data {
             return Expr;
         }
 
-        public Expression BuildLoadGroupsExpr(bool paginate, bool suppressGroups = false, bool suppressTotals = false, Type projectionType = null) {
-            if(Context.ProjectBeforeFilter) {
-                AddSelect(null, projectionType);
-            }
+        public Expression BuildLoadGroupsExpr(bool paginate, bool suppressGroups = false, bool suppressTotals = false) {
             AddFilter();
             AddRemoteGrouping(suppressGroups, suppressTotals, suppressGroups);
             if(paginate)
@@ -71,7 +59,7 @@ namespace DevExtreme.AspNet.Data {
             if(filterOverride != null || Context.HasFilter) {
                 var filterExpr = filterOverride != null && filterOverride.Count < 1
                     ? Expression.Lambda(Expression.Constant(false), Expression.Parameter(GetItemType()))
-                    : new FilterExpressionCompiler(GetItemType(), Context.GuardNulls, Context.UseStringToLower, Context.SupportsEqualsMethod, Context.AutomapperProjectionParameters).Compile(filterOverride ?? Context.Filter);
+                    : new FilterExpressionCompiler(GetItemType(), Context.GuardNulls, Context.UseStringToLower, Context.SupportsEqualsMethod, Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor }.Compile(filterOverride ?? Context.Filter);
 
                 Expr = QueryableCall(nameof(Queryable.Where), Expression.Quote(filterExpr));
             }
@@ -79,7 +67,7 @@ namespace DevExtreme.AspNet.Data {
 
         void AddSort() {
             if(Context.HasAnySort)
-                Expr = new SortExpressionCompiler(GetItemType(), Context.GuardNulls, Context.AutomapperProjectionParameters).Compile(Expr, Context.GetFullSort());
+                Expr = new SortExpressionCompiler(GetItemType(), Context.GuardNulls, Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor }.Compile(Expr, Context.GetFullSort());
         }
 
         void AddSelect(IReadOnlyList<string> selectOverride = null, Type projectionType = null) {
@@ -114,7 +102,7 @@ namespace DevExtreme.AspNet.Data {
                 suppressTotals ? null : Context.TotalSummary,
                 suppressGroupSummary ? null : Context.GroupSummary,
                 Context.AutomapperProjectionParameters
-            );
+            ) { MappedAccessor = Context.MappedAccessor };
             Expr = compiler.Compile(Expr);
         }
 
@@ -123,7 +111,7 @@ namespace DevExtreme.AspNet.Data {
         }
 
         SelectExpressionCompiler CreateSelectCompiler()
-            => new SelectExpressionCompiler(GetItemType(), Context.GuardNulls, Context.CreateAnonTypeNewTweaks(), Context.AutomapperProjectionParameters);
+            => new SelectExpressionCompiler(GetItemType(), Context.GuardNulls, Context.CreateAnonTypeNewTweaks(), Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor };
 
         Expression QueryableCall(string methodName)
             => Expression.Call(typeof(Queryable), methodName, GetQueryableGenericArguments(), Expr);

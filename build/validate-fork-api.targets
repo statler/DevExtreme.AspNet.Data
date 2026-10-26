@@ -1,0 +1,18 @@
+<Project>
+    <!-- The standard package validator cannot compare APIs across a dropped TFM.
+              Compare the assemblies explicitly so the net7.0 suppression does not hide API removals. -->
+    <Target Name="ValidateForkBaselineApi" AfterTargets="Pack"
+                    DependsOnTargets="CollectApiCompatInputs"
+                    Condition="'$(EnablePackageValidation)' == 'true' and '$(Configuration)' == 'Release' and '$(IsCrossTargetingBuild)' == 'true'">
+        <PropertyGroup>
+            <_ForkBaselineAssembly>$(NuGetPackageRoot)dxautomap.aspnet.data/$(PackageValidationBaselineVersion)/lib/net7.0/DXAutomap.AspNet.Data.dll</_ForkBaselineAssembly>
+            <_ForkCurrentAssembly Condition="'$(_ForkCurrentAssembly)' == ''">$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/DXAutomap.AspNet.Data.dll</_ForkCurrentAssembly>
+        </PropertyGroup>
+        <Message Importance="high" Text="Comparing Release public API with DXAutomap.AspNet.Data $(PackageValidationBaselineVersion) (net7.0)." />
+        <Microsoft.DotNet.ApiCompat.Task.ValidateAssembliesTask
+            LeftAssemblies="$(_ForkBaselineAssembly)"
+            RightAssemblies="$(_ForkCurrentAssembly)"
+            CreateWorkItemPerAssembly="true"
+            RoslynAssembliesPath="$(RoslynAssembliesPath)" />
+    </Target>
+</Project>

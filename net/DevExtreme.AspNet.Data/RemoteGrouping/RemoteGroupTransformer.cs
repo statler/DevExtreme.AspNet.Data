@@ -1,5 +1,6 @@
-﻿using DevExtreme.AspNet.Data.Aggregation;
+using DevExtreme.AspNet.Data.Aggregation;
 using DevExtreme.AspNet.Data.ResponseModel;
+using DevExtreme.AspNet.Data.Helpers;
 using DevExtreme.AspNet.Data.Types;
 using System;
 using System.Collections;
@@ -12,7 +13,7 @@ namespace DevExtreme.AspNet.Data.RemoteGrouping {
     class RemoteGroupTransformer {
 
         public static RemoteGroupingResult Run(Type sourceItemType, IEnumerable<AnonType> flatGroups, int groupCount, IReadOnlyList<SummaryInfo> totalSummary,
-            IReadOnlyList<SummaryInfo> groupSummary, object runtimeResolutionContext = null) {
+            IReadOnlyList<SummaryInfo> groupSummary, object runtimeResolutionContext = null, CustomAccessorCompilers.CompilerFunc mappedAccessor = null) {
             List<Group> hierGroups = null;
 
             if(groupCount > 0) {
@@ -33,7 +34,7 @@ namespace DevExtreme.AspNet.Data.RemoteGrouping {
             transformedTotalSummary = transformedTotalSummary ?? new List<SummaryInfo>();
             transformedTotalSummary.Add(new SummaryInfo { SummaryType = AggregateName.REMOTE_COUNT });
 
-            var sumFix = new SumFix(sourceItemType, totalSummary, groupSummary, runtimeResolutionContext);
+            var sumFix = new SumFix(sourceItemType, totalSummary, groupSummary, runtimeResolutionContext) { MappedAccessor = mappedAccessor };
             var totals = new AggregateCalculator<AnonType>(dataToAggregate, AnonTypeAccessor.Instance, transformedTotalSummary, transformedGroupSummary, sumFix, runtimeResolutionContext).Run();
             var totalCount = (int)totals.Last();
 

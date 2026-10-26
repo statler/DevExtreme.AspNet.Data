@@ -2,6 +2,10 @@
 
 ## 1. Summary
 
+Release update: the fork is prepared as **DXAutomap.AspNet.Data 2.0.0**, targeting .NET 10. See [2.0.0 release notes](RELEASE-2.0.0.md) and the [current status](PLAN-rebase-and-tests.md). The sections below preserve the original review findings and recommendations; they are historical, including the old 1.17.0 working version, test gaps and AutoMapper licence discussion. The supported full test entry point now includes the new mapping tests and the .NET 10 provider suites (430 passed, 3 existing skips). CivilPro migration is intentionally a subsequent task.
+
+Update, 2026-10-26: this document records the earlier review. The current working tree uses AutoMapperMIT 14.0.3 and fixes registration reliability, per-load runtime parameters, destination-specific MapFrom lookup, custom-accessor string/group processing, nested property paths, registration type-name collisions, local selection of projected DTOs, and null-mapper diagnostics. All original FIXME tests now assert corrected behaviour. Segment hooks now receive the nested expression/type; whole-path hook precedence is retained. ProjectBeforeFilter is retired: only obsolete no-op compatibility members remain, and the property is excluded from JSON. See `PLAN-rebase-and-tests.md` for current scope and test results. The historical AutoMapper upgrade recommendation below is superseded by the MIT-package choice. CivilPro consumer migration and integration validation remain outstanding.
+
 - **What the API actually uses.** The API does not build the submodule. `cpDataASP/cpDataASP.csproj:52` references the NuGet package DXAutomap.AspNet.Data 1.16.0 (net7.0). Its closest committed source is fork commit d04cfd8, which the user confirmed as the source of truth. The submodule pin 029326c is not that source: it lacks d04cfd8's nested ConcurrentDictionary fix.
 - **What I built.** The fork's changes were rebased onto upstream 6.0.0-beta (tag 9a5a549, which has the same .NET code as master 8b05f05). The result is patches 01–10 from the rebase step, plus patch 11 from this review.
 - **What was checked:**
@@ -163,13 +167,13 @@ Step names refer to `CivilPro/ClientApp/docs/generated-client-contract/OVERVIEW.
    - If L1 lands first, the MCP branch has to be built against 1.17.0 before it merges. Whichever lands second regenerates the lock files, because MCP-server2 also pins 1.16.0.
    - API-3 changes which values reach the library: Group as JSON, two-level sorts, and summaries passed positionally. With L1 already in, a failure after API-3 can be traced to one PR. API-5's planned multi-level sort test through `LoadDtoAsync` then also runs against the library that will ship.
 3. **Land L1 before B2.** In B2, header-filter loads (group, with groupInterval on date columns) move to `_Named` "raw". #737's groupCount fix is in the rebased library.
-4. **Decide ProjectBeforeFilter before API-4.**
+4. **ProjectBeforeFilter retirement decided 2026-10-26; apply it to the CivilPro contract before API-4.**
    - The contract plan treats `projectBeforeFilter` as an option the API reads, so API-4 would add it to the 1151 `I*Args` interfaces (DESIGN.md:325,331).
-   - If the API should stop accepting it from requests (the count, group-count and key queries are not projected, and any caller can set it), handle it as an 11th unread option:
+   - The library no longer reads the option. Handle it as an 11th unread option in the API:
      - tag it in API-1;
      - stop sending it and refuse it in API-4;
      - remove it from the dummy and stop parsing it (develop `DataSourceLoadOptions.cs:128,186`; MCP `:89,147`) in API-7, where `manageLoadOptions` and `dataSourceUtil.ts:105` go away.
-   - The library property stays either way, because `DummyController.cs:80` and the fork tests set it in code.
+   - The library property and parser constant remain obsolete for compatibility. The setter is ignored, the getter returns null, and serializers omit the property. Remove the DummyController assignment as part of consumer cleanup.
 5. **API-7 needs no library change.** The 10 unread options are removed only from `DataSourceLoadOptionsDummy` (API code). `DataSourceLoadOptionsBase` keeps them.
 6. **devextreme-aspnet-data-nojquery: no bump.**
    - The published `index.js` of 4.0.2, 5.1.0 and 6.0.0-beta differs only in the version comment, and the `js/` source is identical from 4.0.0 to 6.0.0-beta. So the client and server versions do not need to match, and DESIGN.md:273's citation of 4.0.2 `index.js:221-228` stays valid.

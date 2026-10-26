@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DevExtreme.AspNet.Data.Helpers;
 using System;
 using System.Collections.Generic;
@@ -99,12 +99,14 @@ namespace DevExtreme.AspNet.Data.Tests {
         }
 
         [Fact]
-        public async Task ProjectBeforeFilterFiltersOnDtoMembers() {
+        public async Task RetiredProjectBeforeFilterUsesTheStandardQueryOrder() {
             var mapper = CreateMapper();
             var options = new SampleLoadOptions {
                 Filter = new object[] { "Scaled", ">", 15 },
                 Sort = new[] { new SortingInfo { Selector = "Scaled" } },
+#pragma warning disable CS0618 // Verify compatibility with callers still setting the retired option.
                 ProjectBeforeFilter = true,
+#pragma warning restore CS0618
                 AllowAsyncOverSync = true
             };
 
@@ -114,7 +116,7 @@ namespace DevExtreme.AspNet.Data.Tests {
             Assert.Equal(new[] { 20, 30 }, data.Select(i => i.Scaled));
 
             var query = DataQuery(options);
-            Assert.True(query.IndexOf(".Select(") < query.IndexOf(".Where("), query);
+            Assert.True(query.IndexOf(".Where(") < query.IndexOf(".Select("), query);
         }
 
         [Fact]

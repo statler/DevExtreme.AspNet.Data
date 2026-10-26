@@ -1,29 +1,36 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.17.0</Version>
+    <Version>2.0.0</Version>
     <PackageId>DXAutomap.AspNet.Data</PackageId>
-    <Description>DevExtreme data layer extension for ASP.NET supporting Automapper</Description>
+    <Description>DevExtreme server-side data loading for .NET 10 with AutoMapperMIT projections and runtime-context-aware custom accessors.</Description>
     <Authors>Devexpress_Statler</Authors>
     <PackageProjectUrl>https://github.com/statler/DevExtreme.AspNet.Data</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageIconUrl>https://secure.gravatar.com/avatar/6b38f1e9ffd8b069bcdc2741934fdbcf?s=512&amp;r=g</PackageIconUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>2.0.0 requires .NET 10 and AutoMapperMIT 14.0.3. Fixes registration concurrency and type collisions, runtime mapping parameters, DTO-specific and nested accessors, string/group processing, local DTO selection and mapper validation. ProjectBeforeFilter is retired. See docs/civilpro/RELEASE-2.0.0.md in the source repository.</PackageReleaseNotes>
+    <RepositoryUrl>https://github.com/statler/DevExtreme.AspNet.Data</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.16.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <PropertyGroup>
     <AssemblyName>DXAutomap.AspNet.Data</AssemblyName>
-    <AssemblyVersion>1.17.0.0</AssemblyVersion>
-    <FileVersion>1.17.0.0</FileVersion>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
     <!-- Only the framework of the API that consumes this package. Add a .NET Framework target only when a .NET Framework consumer needs it. -->
     <TargetFrameworks>net10.0</TargetFrameworks>
-    <DebugType>full</DebugType>
-    <DocumentationFile>bin\Debug\$(TargetFramework)\DevExtreme.AspNet.Data.xml</DocumentationFile>
-    <NoWarn>1591</NoWarn>
+    <DebugType>portable</DebugType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <!-- System.Text.Json and Microsoft.CSharp come from the shared framework, so they have no package references. -->
   <ItemGroup>
-    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="AutoMapperMIT" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,4 +46,5 @@
     </Compile>
   </ItemGroup>
 
+  <Import Project="../../build/validate-fork-api.targets" />
 </Project>

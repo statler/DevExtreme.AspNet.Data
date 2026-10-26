@@ -1,0 +1,9 @@
+<Solution>
+    <Project Path="DevExtreme.AspNet.Data/DevExtreme.AspNet.Data.csproj" />
+    <Project Path="DevExtreme.AspNet.Data.Tests.Common/DevExtreme.AspNet.Data.Tests.Common.csproj" />
+    <Project Path="DevExtreme.AspNet.Data.Tests/DevExtreme.AspNet.Data.Tests.csproj" />
+    <Project Path="DXAutomap.AspNet.Data.Tests/DXAutomap.AspNet.Data.Tests.csproj" />
+    <Project Path="DevExtreme.AspNet.Data.Tests.EFCore10/DevExtreme.AspNet.Data.Tests.EFCore10.csproj" />
+    <Project Path="DevExtreme.AspNet.Data.Tests.NH/DevExtreme.AspNet.Data.Tests.NH.csproj" />
+    <Project Path="DevExtreme.AspNet.Data.Tests.Xpo/DevExtreme.AspNet.Data.Tests.Xpo.csproj" />
+</Solution>

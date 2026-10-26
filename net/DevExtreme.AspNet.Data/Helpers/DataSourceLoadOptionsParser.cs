@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Text.Json;
 
@@ -26,9 +26,11 @@ namespace DevExtreme.AspNet.Data.Helpers {
             KEY_FILTER = "filter",
             KEY_TOTAL_SUMMARY = "totalSummary",
             KEY_GROUP_SUMMARY = "groupSummary",
-            KEY_SELECT = "select",
-            // Public for parsers outside this library that read the fork's ProjectBeforeFilter option; this parser does not read it.
-            KEY_PROJECTBEFOREFILTER = "projectbeforefilter";
+            KEY_SELECT = "select";
+
+        /// <summary>Retained for compatibility with external parsers. The option is ignored.</summary>
+        [Obsolete("ProjectBeforeFilter is retired. Stop reading or sending this option.")]
+        public const string KEY_PROJECTBEFOREFILTER = "projectbeforefilter";
 
         /// <summary>
         /// Converts the string representations of the data processing settings to equivalent values of appropriate types.

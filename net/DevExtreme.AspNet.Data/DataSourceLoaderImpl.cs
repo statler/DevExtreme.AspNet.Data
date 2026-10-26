@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DevExtreme.AspNet.Data.Aggregation;
 using DevExtreme.AspNet.Data.Async;
 using DevExtreme.AspNet.Data.Helpers;
@@ -45,6 +45,8 @@ namespace DevExtreme.AspNet.Data {
         Type dtoType = null;
         public async Task<LoadResult> LoadAsync<TDto>() {
             dtoType = typeof(TDto) == typeof(S) ? null : typeof(TDto);
+            if(dtoType != null && Context.HasProjection)
+                Context.MappedAccessor = new MappedAccessorResolver(Source.ElementType, dtoType, Context.Mapper, Context.AutomapperProjectionParameters).Resolve;
             if(Context.IsCountQuery)
                 return new LoadResult { totalCount = await ExecTotalCountAsync() };
 
@@ -103,7 +105,7 @@ namespace DevExtreme.AspNet.Data {
 
                 if(Context.HasAnySelect) {
                     await ContinueWithGroupingAsync(
-                        await ExecWithSelectAsync(loadExpr),
+                        await ExecWithSelectAsync<TDto>(loadExpr),
                         result
                     );
                 } else if(Context.HasProjection) {
@@ -135,21 +137,25 @@ namespace DevExtreme.AspNet.Data {
                 await ContinueWithAggregationAsync<S>(null, null, result, false);
             } else {
                 var data = await ExecExprAsync<S>(CreateBuilder().BuildLoadExpr(false));
-                await ContinueWithAggregationAsync(data, new DefaultAccessor<S>(Context.AutomapperProjectionParameters), result, false);
+                await ContinueWithAggregationAsync(data, new DefaultAccessor<S>(Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor }, result, false);
             }
 
             return result;
         }
 
-        async Task<IEnumerable<ExpandoObject>> ExecWithSelectAsync(Expression loadExpr) {
+        async Task<IEnumerable<ExpandoObject>> ExecWithSelectAsync<TDto>(Expression loadExpr) {
             if(Context.UseRemoteSelect)
                 return SelectHelper.ConvertRemoteResult(await ExecExprAnonAsync(loadExpr), Context.FullSelect);
+
+            // AddSelect projects to the DTO before local field selection, including nested/LetClause mappings.
+            if(dtoType != null)
+                return SelectHelper.Evaluate(await ExecExprAsync<TDto>(loadExpr), Context.FullSelect, Context.AutomapperProjectionParameters);
 
             return SelectHelper.Evaluate(await ExecExprAsync<S>(loadExpr), Context.FullSelect, Context.AutomapperProjectionParameters);
         }
 
         async Task ContinueWithGroupingAsync<R>(IEnumerable<R> loadResult, LoadResult result) {
-            var accessor = new DefaultAccessor<R>(Context.AutomapperProjectionParameters);
+            var accessor = new DefaultAccessor<R>(Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor };
             if(Context.HasGroups) {
                 var groups = new GroupHelper<R>(accessor).Group(loadResult, Context.Group);
                 if(Context.RequireGroupCount)
@@ -179,7 +185,8 @@ namespace DevExtreme.AspNet.Data {
                 } else if(Context.HasSummary) {
                     if(includeData)
                         data = Buffer<R>(data);
-                    result.summary = new AggregateCalculator<R>(data, accessor, Context.TotalSummary, Context.GroupSummary, null, Context.AutomapperProjectionParameters).Run();
+                    var sumFix = new SumFix(typeof(R), Context.TotalSummary, Context.GroupSummary, Context.AutomapperProjectionParameters) { MappedAccessor = Context.MappedAccessor };
+                    result.summary = new AggregateCalculator<R>(data, accessor, Context.TotalSummary, Context.GroupSummary, sumFix, Context.AutomapperProjectionParameters).Run();
                 }
             }
 
@@ -207,11 +214,11 @@ namespace DevExtreme.AspNet.Data {
         async Task<RemoteGroupingResult> ExecRemoteGroupingAsync(bool remotePaging, bool suppressGroups, bool suppressTotals) {
             return RemoteGroupTransformer.Run(
                 Source.ElementType,
-                await ExecExprAnonAsync(CreateBuilder().BuildLoadGroupsExpr(remotePaging, suppressGroups, suppressTotals, dtoType)),
+                await ExecExprAnonAsync(CreateBuilder().BuildLoadGroupsExpr(remotePaging, suppressGroups, suppressTotals)),
                 !suppressGroups && Context.HasGroups ? Context.Group.Count : 0,
                 !suppressTotals ? Context.TotalSummary : null,
                 !suppressGroups ? Context.GroupSummary : null,
-                Context.AutomapperProjectionParameters
+                Context.AutomapperProjectionParameters, Context.MappedAccessor
             );
         }
 

@@ -36,7 +36,8 @@ if(REPO_NAME === MAIN_REPO_NAME && VERSION_MATCH) {
 }
 
 [
-    "../net/DevExtreme.AspNet.Data/DevExtreme.AspNet.Data.csproj",
+    // Fork NuGet versions are maintained in the project, independently of upstream npm versions.
+    ...(REPO_NAME === MAIN_REPO_NAME ? ["../net/DevExtreme.AspNet.Data/DevExtreme.AspNet.Data.csproj"] : []),
     "../package.json",
     "../js-nojquery/package.json"
 ].forEach(filePath => {

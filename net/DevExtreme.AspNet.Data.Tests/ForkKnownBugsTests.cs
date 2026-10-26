@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DevExtreme.AspNet.Data.Helpers;
 using DevExtreme.AspNet.Data.ResponseModel;
 using System;
@@ -8,12 +8,10 @@ using Xunit;
 
 namespace DevExtreme.AspNet.Data.Tests {
 
-    // Known defects in the fork features, found in the review of 2026-10-26. Each test asserts today's wrong result,
-    // so it passes now and fails once the defect is fixed. The FIXME says what the correct result is and why.
+    // Regression coverage for defects found in the review of 2026-10-26. These tests assert corrected behaviour.
     // The registries are static. Each test clears the compiler lists; AccessorLibrary entries cannot be cleared, so
     // the types below are used only here.
-    // Not covered: the check-then-add race in AccessorLibrary.Add (not deterministic), and the extra accessor finder
-    // that each RegisterAutomapperProfiles call adds (the duplicates return the same results).
+    // Fixed registration defects are covered by ForkRegistrationTests with assertions for the correct behaviour.
     public class ForkKnownBugsTests {
 
         public class KbParent {
@@ -85,7 +83,7 @@ namespace DevExtreme.AspNet.Data.Tests {
         }
 
         [Fact]
-        public void FilterOnMapFromMemberIgnoresProjectionParameter() {
+        public void FilterOnMapFromMemberUsesProjectionParameter() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
@@ -97,22 +95,17 @@ namespace DevExtreme.AspNet.Data.Tests {
 
                 var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper, new { factor = 10 });
 
-                // FIXME: should return IDs 2 and 3 (Scaled 20 and 30), with a total count of 2. The projection uses factor = 10
-                // from the projection parameters, but RegisterAutomapperProfiles stores the MapFrom expression with the
-                // profile's captured variable, so the filter and the count use factor = 1 and match nothing. In the API this
-                // affects NotificationListDto.StatusString, Status, IsRead and IsDismissed (UserId is always null, and
-                // StatusString is in the notifications searchExpr), ApprovalListExtDto and ApprovalListDto.DaysTilDue
-                // (minsOffset is always 600, a time-zone shift), and would affect CustomRegisterDto.IsActive, IsRequired,
-                // IsReported and IsPrivate (RegisterTypeId is always -1) if the client filtered or sorted on them.
-                Assert.Empty(result.data.Cast<KbPersonDto>());
-                Assert.Equal(0, result.totalCount);
+                var data = result.data.Cast<KbPersonDto>().ToArray();
+                Assert.Equal(new[] { 2, 3 }, data.Select(item => item.ID));
+                Assert.Equal(new[] { 20, 30 }, data.Select(item => item.Scaled));
+                Assert.Equal(2, result.totalCount);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void SelectOfMapFromMemberIgnoresProjectionParameter() {
+        public void SelectOfMapFromMemberUsesProjectionParameter() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
@@ -126,16 +119,14 @@ namespace DevExtreme.AspNet.Data.Tests {
                 var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper, new { factor = 10 });
                 var scaled = result.data.Cast<IDictionary<string, object>>().Select(i => i["Scaled"]);
 
-                // FIXME: should be 10, 20 and 30. With a select, the projection is skipped and each field is read through the
-                // stored MapFrom expression, which uses the profile's captured factor = 1, so the returned values are wrong.
-                Assert.Equal(new object[] { 1, 2, 3 }, scaled);
+                Assert.Equal(new object[] { 10, 20, 30 }, scaled);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void ProjectionWithSelectAndLocalSelectThrows() {
+        public void ProjectionWithLocalSelectReturnsSelectedDtoValues() {
             var mapper = CreateMapper();
 
             // RemoteSelect is false by default for LINQ to Objects, and for any provider when there are more than 32 select fields.
@@ -143,14 +134,15 @@ namespace DevExtreme.AspNet.Data.Tests {
                 Select = new[] { "ID", "Doubled" }
             };
 
-            // FIXME: should return the ID and Doubled values. AddSelect projects to the DTO when the select is not remote,
-            // and ExecWithSelectAsync then reads the DTO query as the entity type, which throws. The API caps the select at
-            // 32 fields and does not parse RemoteSelect, so it does not reach this today.
-            Assert.Throws<ArgumentException>(() => DataSourceLoader.Load<KbPerson, KbPersonDto>(People(), options, mapper));
+            var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People(), options, mapper);
+            var rows = result.data.Cast<IDictionary<string, object>>().ToArray();
+            Assert.Equal(new object[] { 1, 2, 3 }, rows.Select(row => row["ID"]));
+            Assert.Equal(new object[] { 2, 4, 6 }, rows.Select(row => row["Doubled"]));
+            Assert.All(rows, row => Assert.Equal(2, row.Count));
         }
 
         [Fact]
-        public void NumericGroupIntervalIsIgnoredOnMapFromMember() {
+        public void NumericGroupIntervalIsAppliedToMapFromMember() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
@@ -163,18 +155,14 @@ namespace DevExtreme.AspNet.Data.Tests {
                 var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper);
                 var keys = result.data.Cast<Group>().Select(g => g.key);
 
-                // FIXME: should be the interval keys 0 and 5 (Doubled is 2, 4 and 6). When a custom accessor resolves the
-                // whole path, CompileAccessorExpression returns it before the progression is built, so the group interval,
-                // the filter's string conversion and ToLower, liftToNullable and the null guards are not applied. Upstream does the same for any custom accessor; the
-                // fork makes every MapFrom member a custom accessor.
-                Assert.Equal(new object[] { 2, 4, 6 }, keys);
+                Assert.Equal(new object[] { 0, 5 }, keys);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void ContainsOnNumericMapFromMemberThrows() {
+        public void ContainsOnNumericMapFromMemberConvertsToString() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
@@ -183,19 +171,15 @@ namespace DevExtreme.AspNet.Data.Tests {
                     Filter = new object[] { "Doubled", "contains", "4" }
                 };
 
-                // FIXME: should match ID 2, as "contains" does on a plain numeric property, which is converted to a string
-                // first. The custom accessor skips the progression, so the int value reaches the string call unconverted. On
-                // LINQ to Objects the null guard (Coalesce with "") throws InvalidOperationException; on EF Core, where null
-                // guards are off, String.Contains on an int throws ArgumentException. Same cause as
-                // NumericGroupIntervalIsIgnoredOnMapFromMember.
-                Assert.Throws<InvalidOperationException>(() => DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper));
+                var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper);
+                Assert.Equal(2, Assert.Single(result.data.Cast<KbPersonDto>()).ID);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void DottedPathSegmentUsesRootTypeAccessor() {
+        public void DottedPathSegmentUsesItsOwnTypeAccessor() {
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(CreateMapper());
                 CustomAccessorCompilers.Register<KbPerson, string>("Name", p => "ROOT-ACCESSOR");
@@ -207,35 +191,15 @@ namespace DevExtreme.AspNet.Data.Tests {
 
                 var result = DataSourceLoader.Load(People().AsQueryable(), options);
 
-                // FIXME: should be 1 (the row whose Parent.Name is p2). ExpressionCompiler looks up each path segment with the
-                // root target instead of the current one, so the segment Name resolves to the root type's Name accessor and
-                // replaces Parent.Name with "ROOT-ACCESSOR".
-                Assert.Equal(0, result.totalCount);
+                Assert.Equal(1, result.totalCount);
+                Assert.Equal(2, Assert.Single(result.data.Cast<KbPerson>()).ID);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void RegisterIsNotUsedWithoutRegisterAutomapperProfiles() {
-            try {
-                CustomAccessorCompilers.Register<KbPerson, int>("KbTriple", p => p.Value * 3);
-
-                var options = new SampleLoadOptions {
-                    Filter = new object[] { "KbTriple", "=", 6 }
-                };
-
-                // FIXME: should match ID 2. Register and RegisterContext only add to the accessor library. The function that
-                // reads the library is registered by RegisterAutomapperProfiles, so without that call KbTriple is treated as
-                // a property name and fails.
-                Assert.Throws<ArgumentException>(() => DataSourceLoader.Load(People().AsQueryable(), options));
-            } finally {
-                CustomAccessorCompilers.Clear();
-            }
-        }
-
-        [Fact]
-        public void AccessorsAreKeyedByShortTypeName() {
+        public void AccessorsWithTheSameShortTypeNameRemainIndependent() {
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(CreateMapper());
                 CustomAccessorCompilers.Register<KbOuterA.KbItem, int>("KbCode", i => i.Value);
@@ -246,16 +210,19 @@ namespace DevExtreme.AspNet.Data.Tests {
                     Filter = new object[] { "KbCode", "=", 2 }
                 };
 
-                // FIXME: should match the item with Value 2. Both types are named KbItem, so the second registration replaces
-                // the first, and its expression, which reads KbOuterB.KbItem.Value, cannot be applied to KbOuterA.KbItem.
-                Assert.Throws<ArgumentException>(() => DataSourceLoader.Load(items, options));
+                var result = DataSourceLoader.Load(items, options);
+                Assert.Equal(2, Assert.Single(result.data.Cast<KbOuterA.KbItem>()).Value);
+                var other = DataSourceLoader.Load(new[] { new KbOuterB.KbItem { Value = 2 } }, new SampleLoadOptions {
+                    Filter = new object[] { "KbCode", "=", 200 }
+                });
+                Assert.Equal(2, Assert.Single(other.data.Cast<KbOuterB.KbItem>()).Value);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void MapFromMembersOfTwoDtosShareOneAccessor() {
+        public void MapFromMembersUseTheRequestedDto() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
@@ -263,56 +230,51 @@ namespace DevExtreme.AspNet.Data.Tests {
                 var orders = new[] { new KbOrder { ID = 1, Code = "x" } }.AsQueryable();
                 var resultA = DataSourceLoader.Load<KbOrder, KbOrderDtoA>(orders, new SampleLoadOptions {
                     Filter = new object[] { "Label", "=", "A:x" },
-                    RequireTotalCount = true,
-                    StringToLower = false
+                    RequireTotalCount = true
                 }, mapper);
                 var resultB = DataSourceLoader.Load<KbOrder, KbOrderDtoB>(orders, new SampleLoadOptions {
                     Filter = new object[] { "Label", "=", "B:x" },
-                    RequireTotalCount = true,
-                    StringToLower = false
+                    RequireTotalCount = true
                 }, mapper);
 
-                // StringToLower is off because whole-path custom accessors are not lowered (see NumericGroupIntervalIsIgnoredOnMapFromMember).
-                // FIXME: each load should match its order, a total of 2. MapFrom entries are keyed by entity type and member
-                // name, without the DTO type, so the last map registered wins and the other DTO's filter uses the wrong
-                // expression. Which DTO wins depends on the order of GetAllTypeMaps.
-                Assert.Equal(1, resultA.totalCount + resultB.totalCount);
+                Assert.Equal(1, resultA.totalCount);
+                Assert.Equal(1, resultB.totalCount);
+                Assert.Equal("A:x", Assert.Single(resultA.data.Cast<KbOrderDtoA>()).Label);
+                Assert.Equal("B:x", Assert.Single(resultB.data.Cast<KbOrderDtoB>()).Label);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void ProjectBeforeFilterCountIsNotProjected() {
+        public void RetiredProjectBeforeFilterKeepsDataAndCountConsistent() {
             var mapper = CreateMapper();
             try {
                 CustomAccessorCompilers.RegisterAutomapperProfiles(mapper);
 
                 var options = new SampleLoadOptions {
                     Filter = new object[] { "Scaled", ">", 15 },
+#pragma warning disable CS0618 // Verify compatibility with callers still setting the retired option.
                     ProjectBeforeFilter = true,
+#pragma warning restore CS0618
                     RequireTotalCount = true
                 };
 
                 var result = DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, mapper, new { factor = 10 });
 
-                // FIXME: the total count should be 2, the number of rows returned. The data query projects before it filters,
-                // but the count query (and the group count and key queries) filter the unprojected entity, through the stored
-                // MapFrom expression, so the count is 0. Any request can set projectbeforefilter through the API's parser.
                 Assert.Equal(2, result.data.Cast<KbPersonDto>().Count());
-                Assert.Equal(0, result.totalCount);
+                Assert.Equal(2, result.totalCount);
             } finally {
                 CustomAccessorCompilers.Clear();
             }
         }
 
         [Fact]
-        public void NullMapperThrowsNullReferenceException() {
+        public void NullMapperIdentifiesTheMissingArgument() {
             var options = new SampleLoadOptions();
 
-            // FIXME: should throw ArgumentNullException for the mapper, or load without projection. TDto differs from T, so
-            // AddSelect reads Context.Mapper, which is null.
-            Assert.Throws<NullReferenceException>(() => DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, null));
+            var error = Assert.Throws<ArgumentNullException>(() => DataSourceLoader.Load<KbPerson, KbPersonDto>(People().AsQueryable(), options, null));
+            Assert.Equal("mapper", error.ParamName);
         }
     }
 

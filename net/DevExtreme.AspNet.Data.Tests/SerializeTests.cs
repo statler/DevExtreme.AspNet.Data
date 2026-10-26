@@ -1,4 +1,4 @@
-﻿//using DevExtreme.AspNet.Data.Helpers;
+//using DevExtreme.AspNet.Data.Helpers;
 
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace DevExtreme.AspNet.Data.Tests {
     public class SerializeTests {
         [Fact]
         public void SerializeEmptyOptions() {
-            Assert.Equal(@"{""RequireTotalCount"":false,""RequireGroupCount"":false,""IsCountQuery"":false,""IsSummaryQuery"":false,""Skip"":0,""Take"":0,""Sort"":null,""Group"":null,""Filter"":null,""TotalSummary"":null,""GroupSummary"":null,""Select"":null,""PreSelect"":null,""RemoteSelect"":null,""RemoteGrouping"":null,""ExpandLinqSumType"":null,""PrimaryKey"":null,""DefaultSort"":null,""StringToLower"":null,""PaginateViaPrimaryKey"":null,""SortByPrimaryKey"":null,""AllowAsyncOverSync"":false,""ProjectBeforeFilter"":null}",
+            Assert.Equal(@"{""RequireTotalCount"":false,""RequireGroupCount"":false,""IsCountQuery"":false,""IsSummaryQuery"":false,""Skip"":0,""Take"":0,""Sort"":null,""Group"":null,""Filter"":null,""TotalSummary"":null,""GroupSummary"":null,""Select"":null,""PreSelect"":null,""RemoteSelect"":null,""RemoteGrouping"":null,""ExpandLinqSumType"":null,""PrimaryKey"":null,""DefaultSort"":null,""StringToLower"":null,""PaginateViaPrimaryKey"":null,""SortByPrimaryKey"":null,""AllowAsyncOverSync"":false}",
                 JsonSerializer.Serialize(new DataSourceLoadOptionsBase()));
         }
 

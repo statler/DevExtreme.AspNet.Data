@@ -1,4 +1,4 @@
-﻿using DevExtreme.AspNet.Data.Helpers;
+using DevExtreme.AspNet.Data.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Dynamic;
@@ -13,6 +13,7 @@ namespace DevExtreme.AspNet.Data {
         protected readonly Type ItemType;
         protected readonly bool GuardNulls;
         public object RuntimeResolutionContext;
+        internal CustomAccessorCompilers.CompilerFunc MappedAccessor { get; set; }
 
         public ExpressionCompiler(Type itemType, bool guardNulls, object runtimeResolutionContext = null) {
             ItemType = itemType;
@@ -21,39 +22,40 @@ namespace DevExtreme.AspNet.Data {
         }
 
         protected internal Expression CompileAccessorExpression(Expression target, string clientExpr, Action<List<Expression>> customizeProgression = null, bool liftToNullable = false) {
-            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr, RuntimeResolutionContext);
-            if(customResult != null)
-                return customResult;
-
+            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr, RuntimeResolutionContext, MappedAccessor);
             var progression = new List<Expression> { target };
+            if(customResult != null) {
+                // Custom accessors still need string/group transformations and the normal null handling.
+                progression.Add(customResult);
+            } else {
+                var clientExprItems = clientExpr.Split('.');
+                var currentTarget = target;
 
-            var clientExprItems = clientExpr.Split('.');
-            var currentTarget = target;
+                for(var i = 0; i < clientExprItems.Length; i++) {
+                    var clientExprItem = clientExprItems[i];
 
-            for(var i = 0; i < clientExprItems.Length; i++) {
-                var clientExprItem = clientExprItems[i];
+                    if(i == 0 && clientExprItem == "this")
+                        continue;
 
-                if(i == 0 && clientExprItem == "this")
-                    continue;
-
-                if(Utils.IsNullable(currentTarget.Type)) {
-                    clientExprItem = "Value";
-                    i--;
-                }
-
-                if(currentTarget.Type == typeof(ExpandoObject))
-                    currentTarget = ReadExpando(currentTarget, clientExprItem);
-                else if(DynamicBindingHelper.ShouldUseDynamicBinding(currentTarget.Type))
-                    currentTarget = DynamicBindingHelper.CompileGetMember(currentTarget, clientExprItem);
-                else {
-                    var customResultSplit = CustomAccessorCompilers.TryCompile(target, clientExprItem, RuntimeResolutionContext);
-                    if(customResultSplit != null) {
-                        currentTarget = customResultSplit;
+                    if(Utils.IsNullable(currentTarget.Type)) {
+                        clientExprItem = "Value";
+                        i--;
                     }
-                    else currentTarget = FixReflectedType(GetPropertyOrField(currentTarget, clientExprItem));
-                }
 
-                progression.Add(currentTarget);
+                    if(currentTarget.Type == typeof(ExpandoObject))
+                        currentTarget = ReadExpando(currentTarget, clientExprItem);
+                    else if(DynamicBindingHelper.ShouldUseDynamicBinding(currentTarget.Type))
+                        currentTarget = DynamicBindingHelper.CompileGetMember(currentTarget, clientExprItem);
+                    else {
+                        var customResultSplit = CustomAccessorCompilers.TryCompile(currentTarget, clientExprItem, RuntimeResolutionContext, MappedAccessor);
+                        if(customResultSplit != null) {
+                            currentTarget = customResultSplit;
+                        }
+                        else currentTarget = FixReflectedType(GetPropertyOrField(currentTarget, clientExprItem));
+                    }
+
+                    progression.Add(currentTarget);
+                }
             }
 
             customizeProgression?.Invoke(progression);
