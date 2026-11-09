@@ -67,12 +67,17 @@ namespace DevExtreme.AspNet.Data {
                         // choice, so it may lead a path the DTO does not declare; the rest is checked against its result.
                         // Deeper in a path it is refused like any member the DTO does not declare.
                         if(checkSegment) {
-                            // A root member the map ignores carries no value in the DTO; refuse it unless a registered
-                            // accessor supplies it, rather than read a same-named entity column the DTO hides.
-                            if(currentTarget == target && customResultSplit == null && MappedAccessor.IsIgnored(clientExprItem))
-                                throw NotAMember(clientExprItem, destination);
-                            destination = DestinationMemberType(destination, clientExprItem,
+                            var owner = destination;
+                            // A member the map ignores carries no value in the DTO; refuse it unless a registered accessor
+                            // supplies it, rather than read a same-named entity column the DTO hides.
+                            if(customResultSplit == null && MappedAccessor.IsIgnored(currentTarget.Type, owner, clientExprItem))
+                                throw NotAMember(clientExprItem, owner);
+                            destination = DestinationMemberType(owner, clientExprItem,
                                 currentTarget == target ? customResultSplit?.Type : null);
+                            // Below the root, read the member through the nested DTO's own map (MapFrom, flattening or
+                            // renaming), as the response does, not the same-named entity member.
+                            if(currentTarget != target && customResultSplit == null)
+                                customResultSplit = MappedAccessor.ResolveNested(currentTarget, owner, clientExprItem);
                         }
                         if(customResultSplit != null) {
                             currentTarget = customResultSplit;
