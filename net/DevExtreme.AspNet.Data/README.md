@@ -1,4 +1,4 @@
-# DXAutomap.AspNet.Data 2.0.0
+# DXAutomap.AspNet.Data 2.0.1
 
 Server-side DevExtreme data loading with AutoMapperMIT projections and runtime-context-aware custom accessors. This is the CivilPro fork of DevExtreme.AspNet.Data, based on the upstream 6.0.0 development line.
 
@@ -10,7 +10,7 @@ Server-side DevExtreme data loading with AutoMapperMIT projections and runtime-c
 ## Install
 
 ```shell
-dotnet add package DXAutomap.AspNet.Data --version 2.0.0
+dotnet add package DXAutomap.AspNet.Data --version 2.0.1
 ```
 
 Pass the mapper and per-request projection parameters to the typed loader:
@@ -21,6 +21,10 @@ var result = await DataSourceLoader.LoadAsync<Entity, EntityDto>(
 ```
 
 The typed loader resolves mapped selectors using the requested DTO, mapper configuration and request parameters. Custom accessors retain precedence according to compiler registration order. `Register` and `RegisterContext` activate accessor lookup independently of global profile registration.
+
+## Changes in 2.0.1
+
+Typed-load selectors and nested accessors are restricted to fields exposed by the destination DTO, preventing access to sensitive underlying entity fields.
 
 ## Changes from 1.16.0
 

@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <PackageId>DXAutomap.AspNet.Data</PackageId>
     <Description>DevExtreme server-side data loading for .NET 10 with AutoMapperMIT projections and runtime-context-aware custom accessors.</Description>
     <Authors>Devexpress_Statler</Authors>
     <PackageProjectUrl>https://github.com/statler/DevExtreme.AspNet.Data</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>2.0.0 requires .NET 10 and AutoMapperMIT 14.0.3. Fixes registration concurrency and type collisions, runtime mapping parameters, DTO-specific and nested accessors, string/group processing, local DTO selection and mapper validation. ProjectBeforeFilter is retired. See docs/civilpro/RELEASE-2.0.0.md in the source repository.</PackageReleaseNotes>
+    <PackageReleaseNotes>2.0.1 restricts typed-load selectors and nested accessors to fields exposed by the destination DTO, preventing access to sensitive underlying entity fields. Requires .NET 10 and AutoMapperMIT 14.0.3.</PackageReleaseNotes>
     <RepositoryUrl>https://github.com/statler/DevExtreme.AspNet.Data</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -19,7 +19,7 @@
   <PropertyGroup>
     <AssemblyName>DXAutomap.AspNet.Data</AssemblyName>
     <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
+    <FileVersion>2.0.1.0</FileVersion>
     <!-- Only the framework of the API that consumes this package. Add a .NET Framework target only when a .NET Framework consumer needs it. -->
     <TargetFrameworks>net10.0</TargetFrameworks>
     <DebugType>portable</DebugType>
