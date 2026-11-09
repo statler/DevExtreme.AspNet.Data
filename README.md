@@ -13,12 +13,20 @@ In typed loads (`LoadAsync<TSource, TDto>`), request selectors can name only mem
 Every published version is built from a commit that is on GitHub and tagged, so anyone can find the exact source of a package. Earlier versions were built from uncommitted changes, which were committed afterwards or not at all: 1.0.0 to 1.14.0, 2.0.0 and 2.0.1 record no commit, and the commit that 1.16.0 records was never pushed.
 
 1. **Make the changes.** Commit them on a branch, merge them into `dev/AddRuntimeResolutionContext-dx-6.0.0` and push.
-2. **Set the version in its own commit.** In `net/DevExtreme.AspNet.Data/DevExtreme.AspNet.Data.csproj` set `Version`, `AssemblyVersion`, `FileVersion` and `PackageReleaseNotes`, and set `PackageValidationBaselineVersion` to the last published version. Update the version and the source tag in `net/DevExtreme.AspNet.Data/README.md` (it is the package's nuget.org page) and the default in `build/package-smoke/PackageSmoke.csproj`, and add the release's section to [RELEASE-2.x.x.md](docs/civilpro/RELEASE-2.x.x.md). To check the packaging before committing, run `./build/release.ps1 -SkipTests -Trial`; it packs `<version>-trial`, which is not for upload.
-3. **Commit, push and tag.** Push the commit, then tag it and push the tag:
+2. **Set the version in its own commit.** With nothing else uncommitted, run:
+
+   ```powershell
+   ./build/set-version.ps1 -Version 2.0.3 -ReleaseNotes "One-line summary for the nuget.org release notes."
+   ```
+
+   It refuses a version that is not later than the current one, is already on nuget.org or is already tagged. It sets `Version`, `AssemblyVersion`, `FileVersion` and `PackageReleaseNotes` in `net/DevExtreme.AspNet.Data/DevExtreme.AspNet.Data.csproj` and makes the current version the `PackageValidationBaselineVersion`. In `net/DevExtreme.AspNet.Data/README.md` (the package's nuget.org page) it updates the version, the install line and the source tag links and adds a "Changes in" entry. It updates the default in `build/package-smoke/PackageSmoke.csproj` and adds a section for the version to [RELEASE-2.x.x.md](docs/civilpro/RELEASE-2.x.x.md). Expand the changes in those two documents if one line is not enough. To check the packaging before committing, run `./build/release.ps1 -SkipTests -Trial`; it packs `<version>-trial`, which is not for upload.
+3. **Commit, push and tag:**
 
    ```shell
-   git tag -a civilpro-v2.0.2 -m "DXAutomap.AspNet.Data 2.0.2"
-   git push origin civilpro-v2.0.2
+   git commit -am "DXAutomap.AspNet.Data 2.0.3"
+   git push
+   git tag -a civilpro-v2.0.3 -m "DXAutomap.AspNet.Data 2.0.3"
+   git push origin civilpro-v2.0.3
    ```
 
 4. **Build from the clean tagged commit.** On Windows with the .NET 10 SDK and SQL Server LocalDB, with `git status` showing no changes, run `./build/release.ps1` from the repository root. It refuses to run if anything is uncommitted or if the tag `civilpro-v<version>` is not on HEAD.
@@ -26,7 +34,7 @@ Every published version is built from a commit that is on GitHub and tagged, so 
 
 If something must change after tagging, commit the fix, move the tag to the new commit and build again. A version cannot be replaced on nuget.org once it is uploaded, so a fix after upload needs a new version.
 
-`release.ps1` builds the solution and runs the full suite (`net/dotnet-test-all.cmd`), runs the mapping suite against the Release build and packs the library; package validation compares the public API with `PackageValidationBaselineVersion`. It then checks the archive (version, README, XML documentation, net10.0 assembly, AutoMapperMIT 14.0.3 as the only runtime dependency, and that the package records the HEAD commit), restores the package into a fresh cache and runs the smoke application in `build/package-smoke`, and writes a SHA-256 checksum beside the package. `-SkipTests` skips the Debug build and the full suite, for use only after a recorded full-suite pass on the same commit.
+`release.ps1` builds the solution and runs the full suite (`net/dotnet-test-all.cmd`), runs the mapping suite against the Release build and packs the library; package validation compares the public API with `PackageValidationBaselineVersion`. It then checks the archive (version, README, XML documentation, net10.0 assembly, AutoMapperMIT 14.0.3 as the only runtime dependency, and that the package records the HEAD commit), restores the package into a fresh cache and runs the smoke application in `build/package-smoke`, and writes a SHA-256 checksum beside the package. `-SkipTests` skips the Debug build and the full suite and is accepted only with `-Trial`, so every upload package has passed the full suite in the run that built it. A published version therefore needs no separate record of its test results: the tag, the commit the package records and the nuget.org listing are the release record.
 
 The package records the repository URL and the commit in its nuspec, where tools such as NuGet Package Explorer show them. The nuget.org page shows only the repository link and the README, so the README's source tag is the link to the source that nuget.org displays.
 

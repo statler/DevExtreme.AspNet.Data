@@ -4,7 +4,7 @@ Release notes and validation records for the fork's .NET package, newest release
 
 ## 2.0.2
 
-Prepared on 2026-11-10 on branch `dev/release-from-clean-commit`; not published.
+Version set on 2026-11-10.
 
 | Item | Value |
 |---|---|
@@ -25,21 +25,13 @@ Prepared on 2026-11-10 on branch `dev/release-from-clean-commit`; not published.
 - The package README states the typed-load selector rules introduced in 2.0.1 and links to the source tag. The 2.0.1 README describes the change in one sentence and links to the 2.0.0 release notes.
 - The assembly version is 2.0.2.0. 2.0.1 kept 2.0.0.0, while its file version is 2.0.1.0.
 - Package validation compares with 2.0.1. Because 2.0.1 has the same target framework, the standard validator compares the APIs directly; the explicit cross-target comparison (`build/validate-fork-api.targets`) and the net7.0 suppression (`CompatibilitySuppressions.xml`), which 2.0.0 needed because it dropped net7.0, are removed.
-- `release.ps1` refuses to build an upload package unless the working tree has no uncommitted changes and the tag `civilpro-v<version>` is on HEAD, and checks that the package records HEAD. `-Trial` packs `<version>-trial` for checking before the release commit exists.
+- `release.ps1` refuses to build an upload package unless the working tree has no uncommitted changes and the tag `civilpro-v<version>` is on HEAD, and checks that the package records HEAD. `-Trial` packs `<version>-trial` for checking before the release commit exists. `-SkipTests` is accepted only with `-Trial`.
+- `build/set-version.ps1` makes the version changes for a release (step 2 of the procedure): project file, package README, package smoke project and a new section in this file.
 - The release procedure is in the repository README. The 2.0.0 release notes moved from `RELEASE-2.0.0.md` into this file; `RELEASE-2.0.0.md` remains as a pointer because the READMEs of the published 2.0.0 and 2.0.1 packages link to it.
 
 ### Validation
 
-Run on 2026-11-10, on Linux with .NET SDK 10.0.302, from the uncommitted working tree of `dev/release-from-clean-commit`. The code is unchanged from 2.0.1; see its validation below.
-
-| Suite or check | Result |
-|---|---|
-| Fork mapping suite, Release | 100 passed |
-| Package validation against 2.0.1 | no differences reported |
-| `release.ps1 -SkipTests -Trial` | archive checks and the smoke application passed |
-| `release.ps1 -SkipTests`, same script, on a scratch clone | refused with uncommitted changes, with no tag, and with the tag on another commit; on the tagged commit all checks passed and the package recorded that commit |
-
-Not yet run: the full suite on Windows with SQL Server LocalDB. `release.ps1` runs it on the tagged commit before upload.
+`release.ps1` builds the package only from the commit tagged `civilpro-v2.0.2`, and only if every check passes: the full suite, the mapping suite against the Release build, package validation against 2.0.1, the archive checks and the smoke application. The code is unchanged from 2.0.1; see its validation below.
 
 ## 2.0.1
 

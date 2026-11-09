@@ -1,4 +1,6 @@
 param(
+    # Skips the Debug build and the full suite. Accepted only with -Trial: an upload package must pass the full suite
+    # in the run that builds it, so a published version needs no separate record of its test results.
     [switch]$SkipTests,
     # Checks packaging before the release commit exists: allows uncommitted or untagged sources and packs
     # <version>-trial, which is not for upload.
@@ -38,11 +40,12 @@ function Assert-TaggedRelease {
 
 Push-Location $repoRoot
 try {
+    if($SkipTests -and -not $Trial) { throw '-SkipTests is accepted only with -Trial: an upload package must pass the full suite in the run that builds it.' }
     if(-not $Trial) { Assert-TaggedRelease }
 
     if(-not $SkipTests) {
         if(-not (Get-Command SqlLocalDB -ErrorAction SilentlyContinue)) {
-            throw 'Full release tests require Windows and SQL Server LocalDB. Use -SkipTests only after recording a successful full suite run.'
+            throw 'The full suite requires Windows and SQL Server LocalDB. To check the packaging elsewhere, use -Trial -SkipTests.'
         }
         Invoke-DotNet build net/DXAutomap.AspNet.Data.slnx -c Debug '-m:1' '-nodeReuse:false' '-p:UseSharedCompilation=false'
         & ./net/dotnet-test-all.cmd --logger trx --results-directory $resultsDirectory
