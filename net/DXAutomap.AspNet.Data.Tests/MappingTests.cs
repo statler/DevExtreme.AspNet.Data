@@ -85,6 +85,39 @@ namespace DXAutomap.AspNet.Data.Tests {
             public int Value { get; set; }
             public int Scaled { get; set; }
         }
+        public class DetailDto {
+            public int Number { get; set; }
+            public string Name { get; set; }
+            public int Adjusted { get; set; }
+            public string Alias { get; set; }
+        }
+        public class DetailedDto {
+            public int Id { get; set; }
+            public DetailDto Detail { get; set; }
+        }
+        public class HidingDto {
+            public int Id { get; set; }
+            public string Text { get; set; }
+        }
+        public class FlatDto {
+            public int Id { get; set; }
+            public string DetailName { get; set; }
+        }
+        public class NoKeyDto {
+            public int Scaled { get; set; }
+        }
+        public class MaskedDetailDto {
+            public int Number { get; set; }
+            public string Name { get; set; }
+        }
+        public class MaskedDetailedDto {
+            public int Id { get; set; }
+            public MaskedDetailDto Detail { get; set; }
+        }
+        public class MaskedTextDto {
+            public int Id { get; set; }
+            public string Text { get; set; }
+        }
         public class LetDto {
             public int Id { get; set; }
             public int Scaled { get; set; }
@@ -94,6 +127,7 @@ namespace DXAutomap.AspNet.Data.Tests {
         static IMapper CreateMapper(int offset = 0) {
             int factor = 1;
             int days = 0;
+            bool hide = false;
             return new MapperConfiguration(cfg => {
                 cfg.CreateMap<Row, DtoA>()
                     .ForMember(d => d.Scaled, o => o.MapFrom(s => s.Value * factor + offset))
@@ -113,6 +147,19 @@ namespace DXAutomap.AspNet.Data.Tests {
                     .ForMember(d => d.Scaled, o => o.MapFrom(s => s.Value * factor))
                     .ForMember(d => d.FirstChild, o => o.MapFrom(s => s.Children.OrderBy(c => c.Id).FirstOrDefault()));
                 cfg.CreateMap<Row, WideDto>().ForAllMembers(o => o.MapFrom(s => s.Value * factor));
+                cfg.CreateMap<Detail, DetailDto>()
+                    .ForMember(d => d.Adjusted, o => o.Ignore())
+                    .ForMember(d => d.Alias, o => o.Ignore());
+                cfg.CreateMap<Row, DetailedDto>();
+                cfg.CreateMap<Row, HidingDto>().ForMember(d => d.Text, o => o.Ignore());
+                cfg.CreateMap<Row, FlatDto>();
+                cfg.CreateMap<Row, NoKeyDto>().ForMember(d => d.Scaled, o => o.MapFrom(s => s.Value * factor));
+                // Parent mapped by name; the nested map masks Name and ignores Number.
+                cfg.CreateMap<Detail, MaskedDetailDto>()
+                    .ForMember(d => d.Name, o => o.MapFrom(s => hide ? null : s.Name))
+                    .ForMember(d => d.Number, o => o.Ignore());
+                cfg.CreateMap<Row, MaskedDetailedDto>();
+                cfg.CreateMap<Row, MaskedTextDto>().ForMember(d => d.Text, o => o.MapFrom(s => hide ? null : s.Text));
             }).CreateMapper();
         }
 
@@ -356,7 +403,7 @@ namespace DXAutomap.AspNet.Data.Tests {
                 var offset = ((NestedContext)context).Offset;
                 return detail => detail.Number + offset;
             });
-            var result = await DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows, new DataSourceLoadOptionsBase {
+            var result = await DataSourceLoader.LoadAsync<Row, DetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
                 Filter = new object[] { "Detail.Adjusted", ">=", 102 },
                 Sort = new[] { new SortingInfo { Selector = "Detail.Adjusted", Desc = true } },
                 Select = new[] { "Id", "Detail.Adjusted" }, RemoteSelect = true,
@@ -377,7 +424,7 @@ namespace DXAutomap.AspNet.Data.Tests {
                 var offset = ((NestedContext)context).Offset;
                 return detail => detail.Number + offset;
             });
-            var result = await DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows, new DataSourceLoadOptionsBase {
+            var result = await DataSourceLoader.LoadAsync<Row, DetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
                 Group = new[] { new GroupingInfo { Selector = "Detail.Adjusted", IsExpanded = false } },
                 RemoteGrouping = true, Take = 10, RequireGroupCount = true, AllowAsyncOverSync = true
             }, CreateMapper(), new NestedContext());
@@ -391,12 +438,223 @@ namespace DXAutomap.AspNet.Data.Tests {
         public async Task NestedStringAccessorKeepsCaseAndNullHandling(bool sqlite) {
             using var data = new Data(sqlite);
             CustomAccessorCompilers.Register<Detail, string>("Alias", detail => detail.Name);
-            var result = await DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows, new DataSourceLoadOptionsBase {
+            var result = await DataSourceLoader.LoadAsync<Row, DetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
                 Filter = new object[] { "Detail.Alias", "contains", "IX" }, StringToLower = true,
                 RequireTotalCount = true, AllowAsyncOverSync = true
             }, CreateMapper());
-            Assert.Equal(2, Assert.Single(result.data.Cast<DtoA>()).Id);
+            Assert.Equal(2, Assert.Single(result.data.Cast<DetailedDto>()).Id);
             Assert.Equal(1, result.totalCount);
+        }
+
+        // A typed load queries the source item but returns the DTO: a selector may only name what the DTO exposes.
+        [Theory]
+        [InlineData(false, "filter", "Value")]
+        [InlineData(true, "filter", "Value")]
+        [InlineData(false, "filter", "Detail.Number")]
+        [InlineData(true, "filter", "Detail.Number")]
+        [InlineData(true, "filter", "detail.number")]
+        [InlineData(false, "sort", "Detail.Number")]
+        [InlineData(true, "sort", "Value")]
+        [InlineData(false, "select", "Detail.Number")]
+        [InlineData(true, "select", "Value")]
+        [InlineData(false, "group", "Detail.Number")]
+        [InlineData(true, "group", "Value")]
+        [InlineData(false, "totalSummary", "Value")]
+        [InlineData(true, "totalSummary", "Detail.Number")]
+        [InlineData(true, "groupSummary", "Value")]
+        [InlineData(true, "select", "this")]
+        [InlineData(true, "select", "this.Value")]
+        public async Task TypedLoadRefusesSelectorsTheDtoDoesNotExpose(bool sqlite, string part, string selector) {
+            using var data = new Data(sqlite);
+            var options = new DataSourceLoadOptionsBase { RequireTotalCount = true, AllowAsyncOverSync = true };
+            switch(part) {
+                case "filter": options.Filter = new object[] { selector, ">=", 2 }; break;
+                case "sort": options.Sort = new[] { new SortingInfo { Selector = selector } }; break;
+                case "select": options.Select = new[] { "Id", selector }; options.RemoteSelect = true; break;
+                case "group": options.Group = new[] { new GroupingInfo { Selector = selector, IsExpanded = false } }; options.RemoteGrouping = true; break;
+                case "totalSummary": options.TotalSummary = new[] { new SummaryInfo { Selector = selector, SummaryType = "max" } }; break;
+                case "groupSummary":
+                    options.Group = new[] { new GroupingInfo { Selector = "Id", IsExpanded = false } };
+                    options.GroupSummary = new[] { new SummaryInfo { Selector = selector, SummaryType = "max" } };
+                    break;
+            }
+            var error = await Assert.ThrowsAsync<ArgumentException>(() =>
+                DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows, options, CreateMapper(), new { factor = 10 }));
+            Assert.Contains("is not a member of type", error.Message);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadAcceptsANestedPathTheDtoDeclares(bool sqlite) {
+            using var data = new Data(sqlite);
+            var result = await DataSourceLoader.LoadAsync<Row, DetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { "Detail.Number", ">=", 2 },
+                Sort = new[] { new SortingInfo { Selector = "detail.number", Desc = true } },
+                RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper());
+            Assert.Equal(new[] { 3, 2 }, result.data.Cast<DetailedDto>().Select(row => row.Id));
+            Assert.Equal(2, result.totalCount);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadAcceptsARegisteredAccessorTheDtoDoesNotDeclare(bool sqlite) {
+            using var data = new Data(sqlite);
+            CustomAccessorCompilers.Register<Row, int>("RegisteredBonus", row => row.Value + 1);
+            var result = await DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows,
+                Filter("RegisteredBonus", 3), CreateMapper(), new { factor = 10 });
+            Assert.Equal(2, Assert.Single(result.data.Cast<DtoA>()).Id);
+        }
+
+        // The loader sorts and pages by the source item's primary key; the DTO need not carry it.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadPagesByAPrimaryKeyTheDtoDoesNotCarry(bool sqlite) {
+            using var data = new Data(sqlite);
+            var result = await DataSourceLoader.LoadAsync<Row, NoKeyDto>(data.Rows, new DataSourceLoadOptionsBase {
+                PrimaryKey = new[] { "Id" }, Skip = 1, Take = 2, RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper(), new { factor = 10 });
+            Assert.Equal(new[] { 20, 30 }, result.data.Cast<NoKeyDto>().Select(row => row.Scaled));
+            Assert.Equal(3, result.totalCount);
+        }
+
+        // A registered accessor on the source item may lead a path the DTO does not declare; the rest of the path is
+        // checked against the accessor's result.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadAcceptsAPathLedByARegisteredRootAccessor(bool sqlite) {
+            using var data = new Data(sqlite);
+            CustomAccessorCompilers.Register<Row, Detail>("RegisteredDetail", row => row.Detail);
+            var result = await DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { "RegisteredDetail.Number", ">=", 2 }, RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper(), new { factor = 10 });
+            Assert.Equal(new[] { 2, 3 }, result.data.Cast<DtoA>().Select(row => row.Id));
+
+            var error = await Assert.ThrowsAsync<ArgumentException>(() => DataSourceLoader.LoadAsync<Row, DtoA>(data.Rows,
+                Filter("RegisteredDetail.Missing", 2), CreateMapper(), new { factor = 10 }));
+            Assert.Contains("is not a member of type", error.Message);
+        }
+
+        // Deeper in a path, a registered accessor is refused unless the DTO declares it: otherwise any root that
+        // navigates to its type could read it.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadRefusesANestedRegisteredAccessorTheDtoDoesNotDeclare(bool sqlite) {
+            using var data = new Data(sqlite);
+            CustomAccessorCompilers.Register<Detail, int>("RegisteredOnDetail", detail => detail.Number * 7);
+            var error = await Assert.ThrowsAsync<ArgumentException>(() => DataSourceLoader.LoadAsync<Row, DetailedDto>(data.Rows,
+                Filter("Detail.RegisteredOnDetail", 14), CreateMapper()));
+            Assert.Contains("is not a member of type", error.Message);
+        }
+
+        // A member the map ignores carries no value in the DTO, so the same-named entity column is not readable through it.
+        [Theory]
+        [InlineData(false, "filter")]
+        [InlineData(true, "filter")]
+        [InlineData(true, "select")]
+        [InlineData(true, "sort")]
+        public async Task TypedLoadRefusesAMemberTheMapIgnores(bool sqlite, string part) {
+            using var data = new Data(sqlite);
+            var options = new DataSourceLoadOptionsBase { AllowAsyncOverSync = true };
+            if(part == "filter") options.Filter = new object[] { "Text", "=", "MiXeD" };
+            if(part == "select") { options.Select = new[] { "Id", "Text" }; options.RemoteSelect = true; }
+            if(part == "sort") options.Sort = new[] { new SortingInfo { Selector = "Text" } };
+            var error = await Assert.ThrowsAsync<ArgumentException>(() => DataSourceLoader.LoadAsync<Row, HidingDto>(data.Rows, options, CreateMapper()));
+            Assert.Contains("is not a member of type", error.Message);
+        }
+
+        // A nested DTO's own map applies when its parent is mapped by name: a selector reads the masked value the response
+        // carries, not the entity column.
+        [Theory]
+        [InlineData(false, "Detail.Name")]
+        [InlineData(true, "Detail.Name")]
+        [InlineData(true, "detail.NAME")]
+        public async Task TypedLoadAppliesTheNestedMapUnderAParentMappedByName(bool sqlite, string selector) {
+            using var data = new Data(sqlite);
+            var masked = await DataSourceLoader.LoadAsync<Row, MaskedDetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { selector, "=", "MiXeD" }, RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper(), new { hide = true });
+            Assert.Equal(0, masked.totalCount);
+
+            var shown = await DataSourceLoader.LoadAsync<Row, MaskedDetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { selector, "=", "MiXeD" }, RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper(), new { hide = false });
+            Assert.Equal(new[] { 2 }, shown.data.Cast<MaskedDetailedDto>().Select(row => row.Id));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadSelectsTheNestedMaskedValue(bool sqlite) {
+            using var data = new Data(sqlite);
+            var result = await DataSourceLoader.LoadAsync<Row, MaskedDetailedDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Select = new[] { "Id", "Detail.Name" }, RemoteSelect = true, Sort = new[] { new SortingInfo { Selector = "Id" } },
+                AllowAsyncOverSync = true
+            }, CreateMapper(), new { hide = true });
+            var names = result.data.Cast<IDictionary<string, object>>()
+                .Select(row => row["Detail"] is IDictionary<string, object> detail ? detail["Name"] : null);
+            Assert.All(names, Assert.Null);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TypedLoadRefusesANestedMemberItsMapIgnores(bool sqlite) {
+            using var data = new Data(sqlite);
+            var error = await Assert.ThrowsAsync<ArgumentException>(() => DataSourceLoader.LoadAsync<Row, MaskedDetailedDto>(data.Rows,
+                Filter("Detail.Number", 2), CreateMapper()));
+            Assert.Contains("is not a member of type", error.Message);
+        }
+
+        // A root MapFrom applies whatever case the selector is written in.
+        [Theory]
+        [InlineData(false, "text")]
+        [InlineData(true, "text")]
+        [InlineData(true, "TEXT")]
+        public async Task TypedLoadAppliesARootMapFromWhateverTheCase(bool sqlite, string selector) {
+            using var data = new Data(sqlite);
+            var result = await DataSourceLoader.LoadAsync<Row, MaskedTextDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { selector, "=", "MiXeD" }, RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper(), new { hide = true });
+            Assert.Equal(0, result.totalCount);
+        }
+
+        // A member AutoMapper flattens from a path (DetailName <- Detail.Name) resolves to that path, not to a missing
+        // entity member of the same name. EF only: AutoMapper's flattened projection has no null check, so in memory the
+        // row without a Detail fails in the projection itself.
+        [Fact]
+        public async Task TypedLoadFiltersAFlattenedMemberOnItsSourcePath() {
+            using var data = new Data(sqlite: true);
+            var result = await DataSourceLoader.LoadAsync<Row, FlatDto>(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { "DetailName", "=", "MiXeD" },
+                Sort = new[] { new SortingInfo { Selector = "DetailName" } },
+                RequireTotalCount = true, AllowAsyncOverSync = true
+            }, CreateMapper());
+            var row = Assert.Single(result.data.Cast<FlatDto>());
+            Assert.Equal(2, row.Id);
+            Assert.Equal("MiXeD", row.DetailName);
+        }
+
+        // The upstream load (no destination type) is unchanged: paths resolve on the queried type, as before.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task UntypedLoadStillResolvesPathsOnTheQueriedType(bool sqlite) {
+            using var data = new Data(sqlite);
+            var result = await DataSourceLoader.LoadAsync(data.Rows, new DataSourceLoadOptionsBase {
+                Filter = new object[] { "Detail.Number", ">=", 2 },
+                Sort = new[] { new SortingInfo { Selector = "Value", Desc = true } },
+                Select = new[] { "Id", "Detail.Name" }, RemoteSelect = true,
+                RequireTotalCount = true, AllowAsyncOverSync = true
+            });
+            var rows = result.data.Cast<IDictionary<string, object>>().ToArray();
+            Assert.Equal(new object[] { 3, 2 }, rows.Select(row => row["Id"]));
+            Assert.Equal(new object[] { "Other", "MiXeD" }, rows.Select(row => ((IDictionary<string, object>)row["Detail"])["Name"]));
         }
 
         [Theory]

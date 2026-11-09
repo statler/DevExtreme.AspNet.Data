@@ -13,7 +13,8 @@ namespace DevExtreme.AspNet.Data {
         protected readonly Type ItemType;
         protected readonly bool GuardNulls;
         public object RuntimeResolutionContext;
-        internal CustomAccessorCompilers.CompilerFunc MappedAccessor { get; set; }
+        internal MappedAccessorResolver MappedAccessor { get; set; }
+        CustomAccessorCompilers.CompilerFunc MappedResolve => MappedAccessor == null ? null : MappedAccessor.Resolve;
 
         public ExpressionCompiler(Type itemType, bool guardNulls, object runtimeResolutionContext = null) {
             ItemType = itemType;
@@ -22,7 +23,7 @@ namespace DevExtreme.AspNet.Data {
         }
 
         protected internal Expression CompileAccessorExpression(Expression target, string clientExpr, Action<List<Expression>> customizeProgression = null, bool liftToNullable = false) {
-            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr, RuntimeResolutionContext, MappedAccessor);
+            var customResult = CustomAccessorCompilers.TryCompile(target, clientExpr, RuntimeResolutionContext, MappedResolve);
             var progression = new List<Expression> { target };
             if(customResult != null) {
                 // Custom accessors still need string/group transformations and the normal null handling.
@@ -31,23 +32,53 @@ namespace DevExtreme.AspNet.Data {
                 var clientExprItems = clientExpr.Split('.');
                 var currentTarget = target;
 
+                // A typed load queries the source item but returns the DTO. A selector may only name what the DTO
+                // exposes, so each segment must also be a member of the DTO, or of the previous segment's DTO type.
+                // The load's own primary key is the server's, not the request's.
+                var destination = MappedAccessor?.DestinationTypeFor(target);
+                if(destination != null && MappedAccessor.IsServerKey(clientExpr))
+                    destination = null;
+                if(destination != null && clientExprItems.All(item => item == "this"))
+                    throw NotAMember(clientExpr, destination);
+
                 for(var i = 0; i < clientExprItems.Length; i++) {
                     var clientExprItem = clientExprItems[i];
 
                     if(i == 0 && clientExprItem == "this")
                         continue;
 
+                    var checkSegment = false;
                     if(Utils.IsNullable(currentTarget.Type)) {
                         clientExprItem = "Value";
                         i--;
+                    } else {
+                        checkSegment = destination != null;
                     }
 
-                    if(currentTarget.Type == typeof(ExpandoObject))
+                    if(currentTarget.Type == typeof(ExpandoObject)) {
+                        if(checkSegment) destination = DestinationMemberType(destination, clientExprItem, null);
                         currentTarget = ReadExpando(currentTarget, clientExprItem);
-                    else if(DynamicBindingHelper.ShouldUseDynamicBinding(currentTarget.Type))
+                    } else if(DynamicBindingHelper.ShouldUseDynamicBinding(currentTarget.Type)) {
+                        if(checkSegment) destination = DestinationMemberType(destination, clientExprItem, null);
                         currentTarget = DynamicBindingHelper.CompileGetMember(currentTarget, clientExprItem);
-                    else {
-                        var customResultSplit = CustomAccessorCompilers.TryCompile(currentTarget, clientExprItem, RuntimeResolutionContext, MappedAccessor);
+                    } else {
+                        var customResultSplit = CustomAccessorCompilers.TryCompile(currentTarget, clientExprItem, RuntimeResolutionContext, MappedResolve);
+                        // A registered accessor on the source item itself (e.g. CustomRegisterValue_12) is the server's
+                        // choice, so it may lead a path the DTO does not declare; the rest is checked against its result.
+                        // Deeper in a path it is refused like any member the DTO does not declare.
+                        if(checkSegment) {
+                            var owner = destination;
+                            // A member the map ignores carries no value in the DTO; refuse it unless a registered accessor
+                            // supplies it, rather than read a same-named entity column the DTO hides.
+                            if(customResultSplit == null && MappedAccessor.IsIgnored(currentTarget.Type, owner, clientExprItem))
+                                throw NotAMember(clientExprItem, owner);
+                            destination = DestinationMemberType(owner, clientExprItem,
+                                currentTarget == target ? customResultSplit?.Type : null);
+                            // Below the root, read the member through the nested DTO's own map (MapFrom, flattening or
+                            // renaming), as the response does, not the same-named entity member.
+                            if(currentTarget != target && customResultSplit == null)
+                                customResultSplit = MappedAccessor.ResolveNested(currentTarget, owner, clientExprItem);
+                        }
                         if(customResultSplit != null) {
                             currentTarget = customResultSplit;
                         }
@@ -121,6 +152,24 @@ namespace DevExtreme.AspNet.Data {
                 Expression.Constant(member)
             );
         }
+
+        // Matched as Expression.PropertyOrField matches: public instance members, case-insensitive, exact case first.
+        // registeredType: the result type of a registered accessor that may stand in for a member the DTO lacks.
+        static Type DestinationMemberType(Type destination, string member, Type registeredType) {
+            var candidates = destination.GetMember(member, MemberTypes.Property | MemberTypes.Field,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase | BindingFlags.FlattenHierarchy);
+            var found = candidates.FirstOrDefault(m => m.Name == member) ?? candidates.FirstOrDefault();
+            var type = found switch {
+                PropertyInfo property => property.PropertyType,
+                FieldInfo field => field.FieldType,
+                _ => registeredType ?? throw NotAMember(member, destination)
+            };
+            return Nullable.GetUnderlyingType(type) ?? type;
+        }
+
+        // The message and parameter name Expression.PropertyOrField uses for an unknown member.
+        static ArgumentException NotAMember(string member, Type type)
+            => new ArgumentException($"'{member}' is not a member of type '{type}'", "propertyOrFieldName");
 
         internal static MemberExpression GetPropertyOrField(Expression expression, string propertyOrFieldName) {
             MemberExpression memberExpr;

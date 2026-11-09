@@ -13,7 +13,7 @@ namespace DevExtreme.AspNet.Data.RemoteGrouping {
     class RemoteGroupTransformer {
 
         public static RemoteGroupingResult Run(Type sourceItemType, IEnumerable<AnonType> flatGroups, int groupCount, IReadOnlyList<SummaryInfo> totalSummary,
-            IReadOnlyList<SummaryInfo> groupSummary, object runtimeResolutionContext = null, CustomAccessorCompilers.CompilerFunc mappedAccessor = null) {
+            IReadOnlyList<SummaryInfo> groupSummary, object runtimeResolutionContext = null, MappedAccessorResolver mappedAccessor = null) {
             List<Group> hierGroups = null;
 
             if(groupCount > 0) {
