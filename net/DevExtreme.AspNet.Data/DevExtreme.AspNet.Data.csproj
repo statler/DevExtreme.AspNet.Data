@@ -1,25 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>2.0.1</Version>
+    <Version>2.0.2</Version>
     <PackageId>DXAutomap.AspNet.Data</PackageId>
     <Description>DevExtreme server-side data loading for .NET 10 with AutoMapperMIT projections and runtime-context-aware custom accessors.</Description>
     <Authors>Devexpress_Statler</Authors>
     <PackageProjectUrl>https://github.com/statler/DevExtreme.AspNet.Data</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>2.0.1 restricts typed-load selectors and nested accessors to fields exposed by the destination DTO, preventing access to sensitive underlying entity fields. Requires .NET 10 and AutoMapperMIT 14.0.3.</PackageReleaseNotes>
+    <PackageReleaseNotes>2.0.2 has the same code as 2.0.1. It is built from the commit tagged civilpro-v2.0.2 and records that commit, and its README documents the typed-load selector rules from 2.0.1: typed loads (LoadAsync&lt;TSource, TDto&gt;) accept only selectors that name members of the DTO, and selectors that name only source members throw ArgumentException. Requires .NET 10 and AutoMapperMIT 14.0.3. See docs/civilpro/RELEASE-2.x.x.md in the source repository.</PackageReleaseNotes>
     <RepositoryUrl>https://github.com/statler/DevExtreme.AspNet.Data</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion>1.16.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion>2.0.1</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <PropertyGroup>
     <AssemblyName>DXAutomap.AspNet.Data</AssemblyName>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.1.0</FileVersion>
+    <AssemblyVersion>2.0.2.0</AssemblyVersion>
+    <FileVersion>2.0.2.0</FileVersion>
     <!-- Only the framework of the API that consumes this package. Add a .NET Framework target only when a .NET Framework consumer needs it. -->
     <TargetFrameworks>net10.0</TargetFrameworks>
     <DebugType>portable</DebugType>
@@ -46,5 +46,4 @@
     </Compile>
   </ItemGroup>
 
-  <Import Project="../../build/validate-fork-api.targets" />
 </Project>

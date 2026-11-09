@@ -2,7 +2,7 @@
 
 Updated 2026-10-26. Release version: **2.0.0**. The former 1.17.0 working version was not released; 2.0.0 reflects the .NET target and dependency changes and the retirement of ProjectBeforeFilter.
 
-The authoritative release notes, validation record and packaging procedure are in [RELEASE-2.0.0.md](RELEASE-2.0.0.md). The [original fork review](fork-review-2026-10-23.md) is retained as historical evidence, not a current implementation checklist.
+The authoritative release notes and validation records are in [RELEASE-2.x.x.md](RELEASE-2.x.x.md), which also covers the later 2.0.1 and 2.0.2 releases; the release procedure is in the [repository README](../../README.md#releasing-a-version). The [original fork review](fork-review-2026-10-23.md) is retained as historical evidence, not a current implementation checklist.
 
 ## Source and package
 
