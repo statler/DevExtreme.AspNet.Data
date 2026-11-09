@@ -88,7 +88,7 @@ namespace DevExtreme.AspNet.Data {
         public IMapper Mapper => _mapper;
         public bool HasProjection => _mapper != null;
         public object AutomapperProjectionParameters { get; set; }
-        public CustomAccessorCompilers.CompilerFunc MappedAccessor { get; set; }
+        public MappedAccessorResolver MappedAccessor { get; set; }
     }
 
     // Grouping

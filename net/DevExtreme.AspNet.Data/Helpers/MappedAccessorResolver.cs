@@ -12,15 +12,30 @@ namespace DevExtreme.AspNet.Data.Helpers {
         readonly Type _sourceType;
         readonly Lazy<Dictionary<string, LambdaExpression>> _accessors;
 
-        public MappedAccessorResolver(Type sourceType, Type destinationType, IMapper mapper, object parameters) {
+        /// <summary>The DTO a typed load returns. Selectors on the source item may only name its members.</summary>
+        public Type DestinationType { get; }
+
+        readonly HashSet<string> _serverKeys;
+        readonly Lazy<HashSet<string>> _ignored;
+
+        public MappedAccessorResolver(Type sourceType, Type destinationType, IMapper mapper, object parameters,
+            IEnumerable<string> serverKeys = null) {
             _sourceType = sourceType;
+            DestinationType = destinationType;
+            _serverKeys = new HashSet<string>(serverKeys ?? Array.Empty<string>(), StringComparer.Ordinal);
+            _ignored = new Lazy<HashSet<string>>(() => new HashSet<string>(
+                mapper.ConfigurationProvider.Internal().ResolveTypeMap(sourceType, destinationType)?.PropertyMaps
+                    .Where(p => p.Ignored).Select(p => p.DestinationName) ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase));
             _accessors = new Lazy<Dictionary<string, LambdaExpression>>(() => {
                 var configuration = mapper.ConfigurationProvider.Internal();
                 var map = configuration.ResolveTypeMap(sourceType, destinationType);
                 var accessors = new Dictionary<string, LambdaExpression>(StringComparer.Ordinal);
                 if(map == null)
                     return accessors;
-                var members = map.PropertyMaps.Where(p => p.CustomMapExpression != null && !p.Ignored).ToArray();
+                // MapFrom members, and members AutoMapper flattens from a path (OwnerEmail <- Owner.Email): read both from
+                // the projection, so a selector gets the DTO's value rather than a same-named entity member.
+                var members = map.PropertyMaps.Where(p => !p.Ignored && (p.CustomMapExpression != null || p.SourceMembers.Length > 1)).ToArray();
                 if(members.Length == 0)
                     return accessors;
 
@@ -38,6 +53,15 @@ namespace DevExtreme.AspNet.Data.Helpers {
                 return accessors;
             });
         }
+
+        /// <summary>The destination type a selector compiled against <paramref name="target"/> must resolve on, or null when unchecked.</summary>
+        public Type DestinationTypeFor(Expression target) => target.Type == _sourceType ? DestinationType : null;
+
+        /// <summary>A DTO member the map ignores: the DTO never carries a value for it, so it is not the entity's to read.</summary>
+        public bool IsIgnored(string member) => _ignored.Value.Contains(member);
+
+        /// <summary>The load's primary key, which the loader itself sorts and pages by.</summary>
+        public bool IsServerKey(string selector) => _serverKeys.Contains(selector);
 
         public Expression Resolve(Expression target, string member) {
             // DTOs and anonymous grouping results already contain their projected values.

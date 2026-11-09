@@ -46,7 +46,7 @@ namespace DevExtreme.AspNet.Data {
         public async Task<LoadResult> LoadAsync<TDto>() {
             dtoType = typeof(TDto) == typeof(S) ? null : typeof(TDto);
             if(dtoType != null && Context.HasProjection)
-                Context.MappedAccessor = new MappedAccessorResolver(Source.ElementType, dtoType, Context.Mapper, Context.AutomapperProjectionParameters).Resolve;
+                Context.MappedAccessor = new MappedAccessorResolver(Source.ElementType, dtoType, Context.Mapper, Context.AutomapperProjectionParameters, Context.PrimaryKey);
             if(Context.IsCountQuery)
                 return new LoadResult { totalCount = await ExecTotalCountAsync() };
 
